@@ -1,8 +1,10 @@
 import json
 import flet as ft
+import asyncio
 
 from Utils.classes import Person, Expense, Beverage
-from Utils.updater import APP_VERSION, check_for_update
+from Utils.updater import APP_VERSION, check_for_update, download_and_install_update
+from Utils.logger import log, log_error
 
 
 
@@ -426,79 +428,42 @@ class SettingsScreen(ft.Column):
 
     def show_update_dialog(self, update):
 
-        changelog = update.get(
-            "changelog",
-            ""
-        ).strip()
-
-        if not changelog:
-            changelog = (
-                "Für diese Version ist "
-                "kein Änderungsprotokoll vorhanden."
+        async def on_download_click(e):
+            await self.download_update(
+                update["download_url"]
             )
 
         dialog = ft.AlertDialog(
             modal=True,
 
-            title=ft.Row(
-                spacing=10,
-                controls=[
-                    ft.Icon(
-                        ft.Icons.SYSTEM_UPDATE,
-                        size=28
-                    ),
-                    ft.Text(
-                        "Update verfügbar",
-                        size=20,
-                        weight=ft.FontWeight.BOLD
-                    )
-                ]
+            title=ft.Text(
+                f"Update verfügbar: v{update['version']}"
             ),
 
             content=ft.Column(
+                [
+                    ft.Text(
+                        update["changelog"]
+                        or "Keine Änderungen angegeben."
+                    ),
+                ],
                 tight=True,
-                spacing=12,
-                controls=[
-                    ft.Text(
-                        f"Aktuelle Version: {APP_VERSION}"
-                    ),
-
-                    ft.Text(
-                        f"Neue Version: {update['version']}",
-                        weight=ft.FontWeight.BOLD,
-                        size=16
-                    ),
-
-                    ft.Divider(),
-
-                    ft.Text(
-                        "Änderungen:",
-                        weight=ft.FontWeight.BOLD
-                    ),
-
-                    ft.Text(
-                        changelog,
-                        selectable=True
-                    )
-                ]
+                scroll=ft.ScrollMode.AUTO,
             ),
 
             actions=[
                 ft.TextButton(
                     "Später",
                     on_click=lambda e:
-                    self.app.page.pop_dialog()
+                    self.app.page.pop_dialog(),
                 ),
 
                 ft.FilledButton(
-                    "Update herunterladen",
-                    icon=ft.Icons.DOWNLOAD,
-                    on_click=lambda e:
-                    self.download_update(
-                        update["download_url"]
-                    )
-                )
-            ]
+                    "Update installieren",
+                    icon=ft.Icons.SYSTEM_UPDATE,
+                    on_click=on_download_click,
+                ),
+            ],
         )
 
         self.app.page.show_dialog(
@@ -509,28 +474,68 @@ class SettingsScreen(ft.Column):
             self,
             download_url
     ):
-
-        self.app.page.pop_dialog()
+        log("================================")
+        log("Update-Installation gestartet")
+        log(
+            f"Download-URL: {download_url}"
+        )
 
         try:
 
-            url_launcher = ft.UrlLauncher()
+            self.app.page.pop_dialog()
 
-            await url_launcher.launch_url(
-                download_url,
-                mode=ft.LaunchMode.EXTERNAL_APPLICATION
+            log(
+                "Lade neue APK herunter..."
+            )
+
+            apk_path = (
+                await download_and_install_update(
+                    download_url
+                )
+            )
+
+            log(
+                f"APK heruntergeladen: "
+                f"{apk_path}"
+            )
+
+            log(
+                "Android-Installer wurde "
+                "gestartet."
+            )
+
+            self.show_dialog(
+                "Update wird installiert",
+                "Die neue Version wurde "
+                "heruntergeladen.\n\n"
+                "Android öffnet jetzt den "
+                "Installationsdialog.\n\n"
+                "Bestätige dort die Installation."
             )
 
         except Exception as ex:
 
-            self.show_dialog(
-                "Update konnte nicht geöffnet werden",
-                (
-                    "Die Downloadseite konnte "
-                    "nicht geöffnet werden.\n\n"
-                    f"Fehler:\n{ex}"
-                )
+            log_error(
+                "Update-Fehler: "
+                f"{type(ex).__name__}"
             )
+
+            log_error(
+                f"Fehlermeldung: {ex}"
+            )
+
+            self.show_dialog(
+                "Update fehlgeschlagen",
+                "Das Update konnte nicht "
+                "gestartet werden.\n\n"
+                f"Fehler:\n{ex}"
+            )
+
+        log(
+            "Update-Installation beendet"
+        )
+
+        log("================================")
 
     # =========================================================
     # ALLGEMEINER DIALOG

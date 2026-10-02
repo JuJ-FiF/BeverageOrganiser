@@ -1,11 +1,12 @@
 [project]
 name = "beverageorganiser"
-version = "1.0.1"
+version = "1.0.0"
 description = "Getränkekasse"
 requires-python = ">=3.11,<3.13"
 dependencies = [
     "flet==1.0.3",
-    "flet-lottie==1.0.3"
+    "flet-lottie==1.0.3",
+    "pyjnius==1.6.1"
 ]
 
 [tool.flet]
@@ -17,6 +18,11 @@ assets = ["assets"]
 
 [tool.flet.hooks]
 path = "build_hooks"
+
+[tool.flet.android]
+permissions = [
+    "android.permission.REQUEST_INSTALL_PACKAGES"
+]
 
 [tool.flet.template]
 url = "C:\\FLET\\FletTemplates\\NoAndroidNavBar\\build"
