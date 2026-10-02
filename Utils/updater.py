@@ -1,7 +1,7 @@
 import json
-import tomllib
-from pathlib import Path
 from urllib.request import Request, urlopen
+
+from Utils.version import APP_VERSION
 
 
 # =========================================================
@@ -10,34 +10,6 @@ from urllib.request import Request, urlopen
 
 GITHUB_OWNER = "JuJ-FiF"
 GITHUB_REPOSITORY = "BeverageOrganiser"
-
-
-# =========================================================
-# Projektversion
-# =========================================================
-
-def get_app_version():
-    """
-    Liest die Version aus der pyproject.toml.
-    """
-
-    project_root = Path(__file__).resolve().parent.parent
-    pyproject_file = project_root / "pyproject.toml"
-
-    if pyproject_file.exists():
-
-        with open(pyproject_file, "rb") as file:
-            data = tomllib.load(file)
-
-        return data["project"]["version"]
-
-    # Fallback für bereits gebaute Apps,
-    # falls pyproject.toml nicht vorhanden ist.
-    return "0.0.0"
-
-
-APP_VERSION = get_app_version()
-
 
 # =========================================================
 # Versionsvergleich

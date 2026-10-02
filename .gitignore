@@ -40,3 +40,6 @@ Thumbs.db
 
 # FileSync
 *.ffs_db
+
+# Projektspezifisch
+Utils/version.py
