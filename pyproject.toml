@@ -1,0 +1,19 @@
+[project]
+name = "beverageorganiser"
+version = "1.0.0"
+description = "Getränkekasse"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "flet==1.0.3",
+    "flet-lottie==1.0.3"
+]
+
+[tool.flet]
+org = "de.jujfif"
+product = "BeverageOrganiser"
+company = "JuJ-FiF"
+copyright = "Copyright © 2026 JuJ-FiF"
+assets = ["assets"]
+
+[tool.flet.template]
+url = "C:\\FLET\\FletTemplates\\NoAndroidNavBar\\build"

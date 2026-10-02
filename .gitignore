@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Flet / Flutter
+build/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# Android
+.gradle/
+local.properties
+*.keystore
+*.jks
+
+# IDE
+.idea/
+.vscode/
+
+# Python tooling
+.pytest_cache/
+.mypy_cache/
+
+# Runtime data
+data.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# FileSync
+*.ffs_db
