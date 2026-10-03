@@ -28,9 +28,6 @@ local.properties
 .pytest_cache/
 .mypy_cache/
 
-# Runtime data
-data.json
-
 # OS
 .DS_Store
 Thumbs.db
@@ -42,4 +39,6 @@ Thumbs.db
 *.ffs_db
 
 # Projektspezifisch
+data.json
 Utils/version.py
+release.ps1

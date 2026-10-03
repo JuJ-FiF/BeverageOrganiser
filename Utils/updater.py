@@ -4,8 +4,6 @@ import os
 from pathlib import Path
 from urllib.request import Request, urlopen
 
-from jnius import autoclass, cast
-
 from Utils.version import APP_VERSION
 
 
@@ -223,6 +221,8 @@ def start_android_update(apk_path):
     Startet den Android-Installationsdialog
     direkt über die Android-Java-API.
     """
+
+    from jnius import autoclass, cast
 
     apk_path = Path(apk_path)
 

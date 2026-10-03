@@ -19,6 +19,35 @@ class SettingsScreen(ft.Column):
         self.app = app
 
         # -----------------------------------------------------
+        # UPDATE ANZEIGE
+        # -----------------------------------------------------
+
+        self.update_status = ft.Container(
+            visible=False,
+            bgcolor=ft.Colors.GREEN,
+            padding=ft.Padding(
+                left=16,
+                right=16,
+                top=10,
+                bottom=10
+            ),
+            content=ft.Row(
+                [
+                    ft.Icon(
+                        ft.Icons.CHECK_CIRCLE,
+                        color=ft.Colors.WHITE
+                    ),
+                    ft.Text(
+                        "Update wird installiert …",
+                        color=ft.Colors.WHITE,
+                        weight=ft.FontWeight.BOLD
+                    )
+                ],
+                spacing=10
+            )
+        )
+
+        # -----------------------------------------------------
         # FILE PICKER
         # -----------------------------------------------------
 
@@ -93,9 +122,12 @@ class SettingsScreen(ft.Column):
         )
 
         self.controls = [
+            self.update_status,
+
             ft.Container(
                 padding=16,
-                content=self.settings_list
+                content=self.settings_list,
+                expand=True
             )
         ]
 
@@ -470,10 +502,37 @@ class SettingsScreen(ft.Column):
             dialog
         )
 
+    def show_update_status(self):
+
+        self.update_status.visible = True
+
+        self.update_status.content = ft.Row(
+            [
+                ft.Icon(
+                    ft.Icons.CHECK_CIRCLE,
+                    color=ft.Colors.WHITE
+                ),
+                ft.Text(
+                    "Update wird installiert …",
+                    color=ft.Colors.WHITE,
+                    weight=ft.FontWeight.BOLD
+                )
+            ],
+            spacing=10
+        )
+
+        self.update_status.update()
+
+    def hide_update_status(self):
+
+        self.update_status.visible = False
+        self.update_status.update()
+
     async def download_update(
             self,
             download_url
     ):
+
         log("================================")
         log("Update-Installation gestartet")
         log(
@@ -482,7 +541,25 @@ class SettingsScreen(ft.Column):
 
         try:
 
+            # ---------------------------------------------
+            # Update-Dialog schließen
+            # ---------------------------------------------
+
             self.app.page.pop_dialog()
+
+            # ---------------------------------------------
+            # Grünen Status-Balken anzeigen
+            # ---------------------------------------------
+
+            self.show_update_status()
+
+            log(
+                "Update-Balken angezeigt."
+            )
+
+            # ---------------------------------------------
+            # APK herunterladen und Installer starten
+            # ---------------------------------------------
 
             log(
                 "Lade neue APK herunter..."
@@ -504,14 +581,33 @@ class SettingsScreen(ft.Column):
                 "gestartet."
             )
 
-            self.show_dialog(
-                "Update wird installiert",
-                "Die neue Version wurde "
-                "heruntergeladen.\n\n"
-                "Android öffnet jetzt den "
-                "Installationsdialog.\n\n"
-                "Bestätige dort die Installation."
+            # ---------------------------------------------
+            # Status aktualisieren
+            # ---------------------------------------------
+
+            self.update_status.content = ft.Row(
+                [
+                    ft.Icon(
+                        ft.Icons.SYSTEM_UPDATE,
+                        color=ft.Colors.WHITE
+                    ),
+                    ft.Text(
+                        "Update wird installiert …",
+                        color=ft.Colors.WHITE,
+                        weight=ft.FontWeight.BOLD
+                    )
+                ],
+                spacing=10
             )
+
+            self.update_status.update()
+
+            # ---------------------------------------------
+            # KEIN weiterer Dialog
+            #
+            # Android zeigt jetzt seinen eigenen
+            # Installationsdialog.
+            # ---------------------------------------------
 
         except Exception as ex:
 
@@ -523,6 +619,8 @@ class SettingsScreen(ft.Column):
             log_error(
                 f"Fehlermeldung: {ex}"
             )
+
+            self.hide_update_status()
 
             self.show_dialog(
                 "Update fehlgeschlagen",
