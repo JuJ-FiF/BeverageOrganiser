@@ -1,9 +1,9 @@
 import json
 import flet as ft
-import asyncio
 
 from Utils.classes import Person, Expense, Beverage
-from Utils.updater import APP_VERSION, check_for_update, download_and_install_update
+from Utils.updater import check_for_update, download_and_install_update
+from Utils.version import APP_VERSION
 from Utils.logger import log, log_error
 
 

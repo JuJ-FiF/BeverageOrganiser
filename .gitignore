@@ -40,5 +40,4 @@ Thumbs.db
 
 # Projektspezifisch
 data.json
-Utils/version.py
 release.ps1
