@@ -15,6 +15,7 @@ product = "BeverageOrganiser"
 company = "JuJ-FiF"
 copyright = "Copyright © 2026 JuJ-FiF"
 assets = ["assets"]
+permissions = ["camera"]
 
 [tool.flet.android]
 permissions = [
