@@ -16,9 +16,6 @@ company = "JuJ-FiF"
 copyright = "Copyright © 2026 JuJ-FiF"
 assets = ["assets"]
 
-[tool.flet.hooks]
-path = "build_hooks"
-
 [tool.flet.android]
 permissions = [
     "android.permission.REQUEST_INSTALL_PACKAGES"
