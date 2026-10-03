@@ -17,7 +17,7 @@ def get_storage_directory():
     )
 
     if not storage_dir:
-        storage_dir = Path(__file__).resolve().parent
+        storage_dir = Path(__file__).resolve().parent.parent
 
     path = Path(storage_dir)
     path.mkdir(
