@@ -8,14 +8,14 @@ class BeverageScreen(ft.Column):
     def __init__(self, app):
         super().__init__(
             expand=True,
-            spacing=12
+            spacing=12,
         )
 
         self.app = app
 
         self.beverage_list = ft.ListView(
             expand=True,
-            spacing=8
+            spacing=8,
         )
 
         self.controls = [
@@ -24,38 +24,31 @@ class BeverageScreen(ft.Column):
                 content=ft.Text(
                     "Getränkearten & Sorten",
                     size=22,
-                    weight=ft.FontWeight.BOLD
-                )
-            ),
-
-            ft.Container(
-                padding=ft.Padding.symmetric(
-                    horizontal=16
+                    weight=ft.FontWeight.BOLD,
                 ),
+            ),
+            ft.Container(
+                padding=ft.Padding.symmetric(horizontal=16),
                 content=ft.Row(
                     controls=[
                         ft.Text(
                             "Gedrückt halten zum Löschen",
                             size=13,
-                            expand=True
+                            expand=True,
                         ),
-
                         ft.FilledButton(
                             "Sorte hinzufügen",
                             icon=ft.Icons.ADD,
-                            on_click=self.open_add_beverage_dialog
-                        )
-                    ]
-                )
+                            on_click=self.open_add_beverage_dialog,
+                        ),
+                    ],
+                ),
             ),
-
             ft.Container(
                 expand=True,
-                padding=ft.Padding.symmetric(
-                    horizontal=16
-                ),
-                content=self.beverage_list
-            )
+                padding=ft.Padding.symmetric(horizontal=16),
+                content=self.beverage_list,
+            ),
         ]
 
         self.update_list()
@@ -71,10 +64,7 @@ class BeverageScreen(ft.Column):
             tile = ft.Container(
                 bgcolor="#D7C9A8",
                 border_radius=10,
-                padding=ft.Padding.only(
-                    left=16,
-                    bottom=4
-                ),
+                padding=ft.Padding.only(left=16, bottom=4),
                 content=ft.ListTile(
                     title=ft.Text(
                         beverage.name,
@@ -83,20 +73,18 @@ class BeverageScreen(ft.Column):
                     ),
                     subtitle=ft.Text(
                         f"Gesamt gekauft: {beverage.count}x",
-                        color=ft.Colors.BLACK_87
+                        color=ft.Colors.BLACK_87,
                     ),
-                    content_padding=ft.Padding.zero()
-                )
-            )
-
-            gesture = ft.GestureDetector(
-                content=tile,
-                on_long_press=lambda e, b=beverage:
-                    self.confirm_delete_beverage(b)
+                    content_padding=ft.Padding.zero(),
+                ),
             )
 
             self.beverage_list.controls.append(
-                gesture
+                ft.GestureDetector(
+                    content=tile,
+                    on_long_press=lambda e, b=beverage:
+                        self.confirm_delete_beverage(b),
+                )
             )
 
         self.app.page.update()
@@ -106,24 +94,22 @@ class BeverageScreen(ft.Column):
     # ---------------------------------------------------------
 
     def open_add_beverage_dialog(self, e=None):
-
         field = ft.TextField(
             label="Getränkesorte",
             hint_text="z.B. Cola, Bockbier, Apfelschorle",
-            autofocus=True
+            autofocus=True,
         )
 
         def save(e):
             new_name = field.value.strip()
 
-            existing_names = [
-                beverage.name.lower()
-                for beverage
-                in self.app.beverage_objects
-            ]
-
             if not new_name:
                 return
+
+            existing_names = [
+                beverage.name.lower()
+                for beverage in self.app.beverage_objects
+            ]
 
             if new_name.lower() in existing_names:
                 field.error_text = (
@@ -132,18 +118,15 @@ class BeverageScreen(ft.Column):
                 field.update()
                 return
 
-            new_beverage = Beverage(
-                name=new_name,
-                count=0
-            )
-
             self.app.beverage_objects.append(
-                new_beverage
+                Beverage(
+                    name=new_name,
+                    count=0,
+                )
             )
 
             self.app.save_data()
             self.update_list()
-
             self.app.page.pop_dialog()
 
         dialog = ft.AlertDialog(
@@ -154,13 +137,13 @@ class BeverageScreen(ft.Column):
                 ft.TextButton(
                     "Abbrechen",
                     on_click=lambda e:
-                        self.app.page.pop_dialog()
+                        self.app.page.pop_dialog(),
                 ),
                 ft.FilledButton(
                     "Hinzufügen",
-                    on_click=save
-                )
-            ]
+                    on_click=save,
+                ),
+            ],
         )
 
         self.app.page.show_dialog(dialog)
@@ -172,15 +155,11 @@ class BeverageScreen(ft.Column):
     def confirm_delete_beverage(self, beverage):
 
         def delete_action(e):
-
             if beverage in self.app.beverage_objects:
-                self.app.beverage_objects.remove(
-                    beverage
-                )
+                self.app.beverage_objects.remove(beverage)
 
             self.app.save_data()
             self.update_list()
-
             self.app.page.pop_dialog()
 
         dialog = ft.AlertDialog(
@@ -194,13 +173,13 @@ class BeverageScreen(ft.Column):
                 ft.TextButton(
                     "Abbrechen",
                     on_click=lambda e:
-                        self.app.page.pop_dialog()
+                        self.app.page.pop_dialog(),
                 ),
                 ft.FilledButton(
                     "Löschen",
-                    on_click=delete_action
-                )
-            ]
+                    on_click=delete_action,
+                ),
+            ],
         )
 
         self.app.page.show_dialog(dialog)
