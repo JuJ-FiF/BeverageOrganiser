@@ -42,4 +42,4 @@ Thumbs.db
 data.json
 release.ps1
 receipts/
-version.py
+Utils/version.py
