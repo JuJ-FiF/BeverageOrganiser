@@ -5,21 +5,20 @@ import uuid
 
 
 RECEIPT_FOLDER_NAME = "receipts"
+TEMP_RECEIPT_FOLDER_NAME = "receipt_temp"
 
 
 def get_storage_directory():
-    """
-    Liefert den persistenten App-Speicher.
-    """
 
     storage_dir = os.environ.get(
         "FLET_APP_STORAGE_DATA"
     )
 
     if not storage_dir:
-        storage_dir = Path(__file__).resolve().parent
+        storage_dir = os.getcwd() + "/FLET/GetränkeverwaltungFLET"
 
     path = Path(storage_dir)
+
     path.mkdir(
         parents=True,
         exist_ok=True
@@ -29,9 +28,6 @@ def get_storage_directory():
 
 
 def get_receipts_directory():
-    """
-    Liefert den Ordner für die Belegbilder.
-    """
 
     directory = (
         get_storage_directory()
@@ -46,10 +42,24 @@ def get_receipts_directory():
     return directory
 
 
-def create_receipt_filename(extension=".jpg"):
-    """
-    Erstellt einen eindeutigen Dateinamen.
-    """
+def get_temp_receipts_directory():
+
+    directory = (
+        get_storage_directory()
+        / TEMP_RECEIPT_FOLDER_NAME
+    )
+
+    directory.mkdir(
+        parents=True,
+        exist_ok=True
+    )
+
+    return directory
+
+
+def create_receipt_filename(
+    extension=".jpg"
+):
 
     extension = extension.lower()
 
@@ -63,17 +73,16 @@ def create_receipt_filename(extension=".jpg"):
     unique_id = uuid.uuid4().hex[:8]
 
     return (
-        f"{timestamp}_{unique_id}"
+        f"{timestamp}_"
+        f"{unique_id}"
         f"{extension}"
     )
 
 
-def save_receipt(data, extension=".jpg"):
-    """
-    Speichert Bildbytes im Belegordner.
-
-    Gibt den relativen Pfad zurück.
-    """
+def save_receipt(
+    data,
+    extension=".jpg"
+):
 
     if not data:
         raise ValueError(
@@ -85,9 +94,15 @@ def save_receipt(data, extension=".jpg"):
     )
 
     directory = get_receipts_directory()
-    file_path = directory / filename
 
-    with open(file_path, "wb") as file:
+    file_path = (
+        directory / filename
+    )
+
+    with open(
+        file_path,
+        "wb"
+    ) as file:
         file.write(data)
 
     relative_path = (
@@ -98,11 +113,56 @@ def save_receipt(data, extension=".jpg"):
     return relative_path.as_posix()
 
 
+def save_receipt_temp(
+    data,
+    extension=".jpg"
+):
+
+    if not data:
+        raise ValueError(
+            "Es wurden keine Bilddaten übergeben."
+        )
+
+    filename = create_receipt_filename(
+        extension
+    )
+
+    directory = (
+        get_temp_receipts_directory()
+    )
+
+    file_path = (
+        directory / filename
+    )
+
+    with open(
+        file_path,
+        "wb"
+    ) as file:
+        file.write(data)
+
+    return file_path
+
+
+def delete_receipt_temp(
+    file_path
+):
+
+    if not file_path:
+        return
+
+    try:
+
+        path = Path(file_path)
+
+        if path.exists():
+            path.unlink()
+
+    except OSError:
+        pass
+
+
 def get_receipt_path(receipt):
-    """
-    Wandelt den relativen Belegpfad
-    in einen absoluten Dateipfad um.
-    """
 
     if not receipt:
         return None
@@ -112,15 +172,17 @@ def get_receipt_path(receipt):
     if path.is_absolute():
         return path
 
-    return get_storage_directory() / path
+    return (
+        get_storage_directory()
+        / path
+    )
 
 
 def read_receipt(receipt):
-    """
-    Liest einen gespeicherten Beleg als Bytes.
-    """
 
-    path = get_receipt_path(receipt)
+    path = get_receipt_path(
+        receipt
+    )
 
     if not path:
         return None
@@ -130,33 +192,34 @@ def read_receipt(receipt):
 
     try:
         return path.read_bytes()
+
     except OSError:
         return None
 
 
 def delete_receipt(receipt):
-    """
-    Löscht einen Beleg vom Gerät.
-    """
 
-    path = get_receipt_path(receipt)
+    path = get_receipt_path(
+        receipt
+    )
 
     if not path:
         return
 
     try:
+
         if path.exists():
             path.unlink()
+
     except OSError:
         pass
 
 
 def receipt_exists(receipt):
-    """
-    Prüft, ob ein Beleg tatsächlich existiert.
-    """
 
-    path = get_receipt_path(receipt)
+    path = get_receipt_path(
+        receipt
+    )
 
     return (
         path is not None
