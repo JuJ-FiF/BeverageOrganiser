@@ -2,10 +2,10 @@ import json
 import flet as ft
 
 from Utils.classes import Person, Expense, Beverage
-from Utils.receipts import delete_receipt
 from Utils.updater import check_for_update, download_and_install_update
 from Utils.version import APP_VERSION
 from Utils.logger import log, log_error
+
 
 
 class SettingsScreen(ft.Column):
@@ -52,7 +52,6 @@ class SettingsScreen(ft.Column):
         # -----------------------------------------------------
 
         self.file_picker = ft.FilePicker()
-
         self.settings_list = ft.ListView(
             expand=True,
             spacing=0
@@ -77,9 +76,7 @@ class SettingsScreen(ft.Column):
             )
         )
 
-        self.settings_list.controls.append(
-            ft.Divider()
-        )
+        self.settings_list.controls.append(ft.Divider())
 
         # -----------------------------------------------------
         # 2. IMPORT
@@ -167,12 +164,10 @@ class SettingsScreen(ft.Column):
                 person.to_dict()
                 for person in self.app.person_objects
             ],
-
             "expenses": [
                 expense.to_dict()
                 for expense in self.app.expense_objects
             ],
-
             "beverages": [
                 beverage.to_dict()
                 for beverage in self.app.beverage_objects
@@ -188,13 +183,7 @@ class SettingsScreen(ft.Column):
         try:
 
             data = self.create_export_data()
-
-            json_data = json.dumps(
-                data,
-                ensure_ascii=False,
-                indent=4
-            )
-
+            json_data = json.dumps(data, ensure_ascii=False, indent=4)
             file_bytes = json_data.encode("utf-8")
 
             result = await self.file_picker.save_file(
@@ -242,12 +231,10 @@ class SettingsScreen(ft.Column):
             selected_file = files[0]
 
             if not selected_file.bytes:
-
                 self.show_dialog(
                     "Import fehlgeschlagen",
                     "Die ausgewählte Datei konnte nicht gelesen werden."
                 )
-
                 return
 
             data = json.loads(
@@ -255,25 +242,21 @@ class SettingsScreen(ft.Column):
             )
 
             if not isinstance(data, dict):
-
                 raise ValueError(
                     "Die Datei enthält keine gültige Datenstruktur."
                 )
 
             if "persons" not in data:
-
                 raise ValueError(
                     "Der Bereich 'persons' fehlt."
                 )
 
             if "expenses" not in data:
-
                 raise ValueError(
                     "Der Bereich 'expenses' fehlt."
                 )
 
             if "beverages" not in data:
-
                 raise ValueError(
                     "Der Bereich 'beverages' fehlt."
                 )
@@ -300,84 +283,38 @@ class SettingsScreen(ft.Column):
 
     def confirm_import(self, data):
 
-        person_count = len(
-            data.get("persons", [])
-        )
-
-        expense_count = len(
-            data.get("expenses", [])
-        )
-
-        beverage_count = len(
-            data.get("beverages", [])
-        )
+        person_count = len(data.get("persons", []))
+        expense_count = len(data.get("expenses", []))
+        beverage_count = len(data.get("beverages", []))
 
         def perform_import(e):
 
             try:
 
-                # -------------------------------------------------
-                # PERSONEN
-                # -------------------------------------------------
+                # Personen
+                self.app.person_objects.clear()
 
-                self.app.person_objects = [
-                    Person.from_dict(person_data)
-                    for person_data in data.get(
-                        "persons",
-                        []
-                    )
-                ]
+                for person_data in data["persons"]:
+                    person = Person.from_dict(person_data)
+                    self.app.person_objects.append(person)
 
-                # -------------------------------------------------
-                # GETRÄNKE ZUERST LADEN
-                #
-                # Wichtig:
-                # Expense.items enthält echte Beverage-Objekte.
-                # Deshalb müssen diese Objekte existieren,
-                # bevor die Expenses erstellt werden.
-                # -------------------------------------------------
+                # Ausgaben
+                self.app.expense_objects.clear()
 
-                self.app.beverage_objects = [
-                    Beverage.from_dict(beverage_data)
-                    for beverage_data in data.get(
-                        "beverages",
-                        []
-                    )
-                ]
+                for expense_data in data["expenses"]:
+                    expense = Expense.from_dict(expense_data, self.app.beverage_objects)
+                    self.app.expense_objects.append(expense)
 
-                # -------------------------------------------------
-                # AUSGABEN DANACH LADEN
-                #
-                # Jetzt kann Expense.from_dict()
-                # die Getränkenamen wieder den richtigen
-                # Beverage-Objekten zuordnen.
-                #
-                # Dadurch funktionieren auch:
-                # - Getränkezähler
-                # - Löschen von Ausgaben
-                # - OCR-Aliases
-                # - Markt-Aliases
-                # -------------------------------------------------
+                # Getränke
+                self.app.beverage_objects.clear()
 
-                self.app.expense_objects = [
-                    Expense.from_dict(
-                        data=expense_data,
-                        beverage_objects=self.app.beverage_objects
-                    )
-                    for expense_data in data.get(
-                        "expenses",
-                        []
-                    )
-                ]
+                for beverage_data in data["beverages"]:
+                    beverage = Beverage.from_dict(beverage_data)
+                    self.app.beverage_objects.append(beverage)
 
-                # -------------------------------------------------
-                # SPEICHERN
-                # -------------------------------------------------
-
+                # Speichern
                 self.app.save_data()
-
                 self.app.page.pop_dialog()
-
                 self.app.refresh_all_screens()
 
                 self.show_dialog(
@@ -397,33 +334,21 @@ class SettingsScreen(ft.Column):
                     f"Fehler beim Übernehmen der Daten:\n{ex}"
                 )
 
-        # ---------------------------------------------------------
-        # BESTÄTIGUNGSDIALOG
-        # ---------------------------------------------------------
-
         dialog = ft.AlertDialog(
             modal=True,
-
-            title=ft.Text(
-                "Daten importieren"
-            ),
-
+            title=ft.Text("Daten importieren"),
             content=ft.Text(
-                "Möchtest du die aktuellen Daten wirklich "
-                "durch die importierten Daten ersetzen?\n\n"
+                "Möchtest du die aktuellen Daten wirklich durch die importierten Daten ersetzen?\n\n"
                 f"Personen: {person_count}\n"
                 f"Ausgaben: {expense_count}\n"
                 f"Getränkesorten: {beverage_count}\n\n"
                 "Dieser Vorgang kann nicht rückgängig gemacht werden."
             ),
-
             actions=[
                 ft.TextButton(
                     "Abbrechen",
-                    on_click=lambda e:
-                    self.app.page.pop_dialog()
+                    on_click=lambda e: self.app.page.pop_dialog()
                 ),
-
                 ft.FilledButton(
                     "Importieren",
                     on_click=perform_import
@@ -431,9 +356,7 @@ class SettingsScreen(ft.Column):
             ]
         )
 
-        self.app.page.show_dialog(
-            dialog
-        )
+        self.app.page.show_dialog(dialog)
 
     # =========================================================
     # RESET
@@ -443,64 +366,21 @@ class SettingsScreen(ft.Column):
 
         def perform_reset(_):
 
-            # -------------------------------------------------
-            # PERSONEN-BUCHUNGEN LÖSCHEN
-            # -------------------------------------------------
-
+            # Personen-Buchungen löschen
             for person in self.app.person_objects:
 
-                if hasattr(
-                    person,
-                    "transactions"
-                ):
+                if hasattr(person, "transactions"):
                     person.transactions.clear()
 
-            # -------------------------------------------------
-            # BELEGDATEIEN LÖSCHEN
-            #
-            # Wichtig für die neue Belegfunktion:
-            # Die gespeicherten Fotos sollen beim Reset
-            # nicht als verwaiste Dateien zurückbleiben.
-            # -------------------------------------------------
-
-            for expense in self.app.expense_objects:
-
-                if getattr(
-                    expense,
-                    "receipt",
-                    None
-                ):
-                    delete_receipt(
-                        expense.receipt
-                    )
-
-            # -------------------------------------------------
-            # AUSGABEN LÖSCHEN
-            # -------------------------------------------------
-
+            # Ausgaben löschen
             self.app.expense_objects.clear()
 
-            # -------------------------------------------------
-            # GETRÄNKEZÄHLER ZURÜCKSETZEN
-            #
-            # Aliases und Markt-Aliases bleiben erhalten!
-            #
-            # Dadurch muss die OCR nicht bei jedem Reset
-            # neu lernen.
-            # -------------------------------------------------
-
+            # Getränkezähler zurücksetzen
             for beverage in self.app.beverage_objects:
-
                 beverage.count = 0
 
-            # -------------------------------------------------
-            # SPEICHERN
-            # -------------------------------------------------
-
             self.app.save_data()
-
             self.app.page.pop_dialog()
-
             self.app.refresh_all_screens()
 
             self.show_dialog(
@@ -509,17 +389,9 @@ class SettingsScreen(ft.Column):
                 "Ausgaben wurden auf 0 zurückgesetzt."
             )
 
-        # ---------------------------------------------------------
-        # BESTÄTIGUNGSDIALOG
-        # ---------------------------------------------------------
-
         dialog = ft.AlertDialog(
             modal=True,
-
-            title=ft.Text(
-                "Kasse zurücksetzen"
-            ),
-
+            title=ft.Text("Kasse zurücksetzen"),
             content=ft.Text(
                 "Möchtest du wirklich alle Guthaben, "
                 "Ausgaben und gezählten Getränke auf 0 "
@@ -527,14 +399,11 @@ class SettingsScreen(ft.Column):
                 "Die angelegten Personen und Getränkesorten "
                 "bleiben dabei bestehen."
             ),
-
             actions=[
                 ft.TextButton(
                     "Abbrechen",
-                    on_click=lambda e:
-                    self.app.page.pop_dialog()
+                    on_click=lambda e: self.app.page.pop_dialog()
                 ),
-
                 ft.FilledButton(
                     "Alles zurücksetzen",
                     on_click=perform_reset
@@ -542,9 +411,7 @@ class SettingsScreen(ft.Column):
             ]
         )
 
-        self.app.page.show_dialog(
-            dialog
-        )
+        self.app.page.show_dialog(dialog)
 
     # =========================================================
     # CHECK NACH UPDATES
@@ -553,11 +420,7 @@ class SettingsScreen(ft.Column):
     async def check_updates(self, e=None):
 
         # Button während der Prüfung deaktivieren
-        if e is not None and hasattr(
-            e,
-            "control"
-        ):
-
+        if e is not None and hasattr(e, "control"):
             e.control.disabled = True
             e.control.update()
 
@@ -566,7 +429,6 @@ class SettingsScreen(ft.Column):
             update = await check_for_update()
 
             if update is None:
-
                 self.show_dialog(
                     "Keine Updates",
                     (
@@ -577,9 +439,7 @@ class SettingsScreen(ft.Column):
 
                 return
 
-            self.show_update_dialog(
-                update
-            )
+            self.show_update_dialog(update)
 
         except Exception as ex:
 
@@ -594,22 +454,13 @@ class SettingsScreen(ft.Column):
 
         finally:
 
-            if e is not None and hasattr(
-                e,
-                "control"
-            ):
-
+            if e is not None and hasattr(e, "control"):
                 e.control.disabled = False
                 e.control.update()
-
-    # =========================================================
-    # UPDATE DIALOG
-    # =========================================================
 
     def show_update_dialog(self, update):
 
         async def on_download_click(e):
-
             await self.download_update(
                 update["download_url"]
             )
@@ -651,10 +502,6 @@ class SettingsScreen(ft.Column):
             dialog
         )
 
-    # =========================================================
-    # UPDATE STATUS ANZEIGEN
-    # =========================================================
-
     def show_update_status(self):
 
         self.update_status.visible = True
@@ -665,7 +512,6 @@ class SettingsScreen(ft.Column):
                     ft.Icons.CHECK_CIRCLE,
                     color=ft.Colors.WHITE
                 ),
-
                 ft.Text(
                     "Update wird installiert …",
                     color=ft.Colors.WHITE,
@@ -677,32 +523,18 @@ class SettingsScreen(ft.Column):
 
         self.update_status.update()
 
-    # =========================================================
-    # UPDATE STATUS VERSTECKEN
-    # =========================================================
-
     def hide_update_status(self):
 
         self.update_status.visible = False
         self.update_status.update()
 
-    # =========================================================
-    # UPDATE HERUNTERLADEN UND INSTALLIEREN
-    # =========================================================
-
     async def download_update(
-        self,
-        download_url
+            self,
+            download_url
     ):
 
-        log(
-            "================================"
-        )
-
-        log(
-            "Update-Installation gestartet"
-        )
-
+        log("================================")
+        log("Update-Installation gestartet")
         log(
             f"Download-URL: {download_url}"
         )
@@ -710,13 +542,13 @@ class SettingsScreen(ft.Column):
         try:
 
             # ---------------------------------------------
-            # UPDATE-DIALOG SCHLIESSEN
+            # Update-Dialog schließen
             # ---------------------------------------------
 
             self.app.page.pop_dialog()
 
             # ---------------------------------------------
-            # GRÜNEN STATUS-BALKEN ANZEIGEN
+            # Grünen Status-Balken anzeigen
             # ---------------------------------------------
 
             self.show_update_status()
@@ -726,7 +558,7 @@ class SettingsScreen(ft.Column):
             )
 
             # ---------------------------------------------
-            # APK HERUNTERLADEN
+            # APK herunterladen und Installer starten
             # ---------------------------------------------
 
             log(
@@ -750,7 +582,7 @@ class SettingsScreen(ft.Column):
             )
 
             # ---------------------------------------------
-            # STATUS AKTUALISIEREN
+            # Status aktualisieren
             # ---------------------------------------------
 
             self.update_status.content = ft.Row(
@@ -759,7 +591,6 @@ class SettingsScreen(ft.Column):
                         ft.Icons.SYSTEM_UPDATE,
                         color=ft.Colors.WHITE
                     ),
-
                     ft.Text(
                         "Update wird installiert …",
                         color=ft.Colors.WHITE,
@@ -772,7 +603,7 @@ class SettingsScreen(ft.Column):
             self.update_status.update()
 
             # ---------------------------------------------
-            # KEIN WEITERER DIALOG
+            # KEIN weiterer Dialog
             #
             # Android zeigt jetzt seinen eigenen
             # Installationsdialog.
@@ -802,43 +633,27 @@ class SettingsScreen(ft.Column):
             "Update-Installation beendet"
         )
 
-        log(
-            "================================"
-        )
+        log("================================")
 
     # =========================================================
     # ALLGEMEINER DIALOG
     # =========================================================
 
-    def show_dialog(
-        self,
-        title,
-        message
-    ):
+    def show_dialog(self, title, message):
 
         dialog = ft.AlertDialog(
             modal=True,
-
-            title=ft.Text(
-                title
-            ),
-
-            content=ft.Text(
-                message
-            ),
-
+            title=ft.Text(title),
+            content=ft.Text(message),
             actions=[
                 ft.FilledButton(
                     "OK",
-                    on_click=lambda e:
-                    self.app.page.pop_dialog()
+                    on_click=lambda e: self.app.page.pop_dialog()
                 )
             ]
         )
 
-        self.app.page.show_dialog(
-            dialog
-        )
+        self.app.page.show_dialog(dialog)
 
     # =========================================================
     # REFRESH

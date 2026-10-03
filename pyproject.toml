@@ -1,12 +1,11 @@
 [project]
 name = "beverageorganiser"
-version = "1.1.2"
+version = "1.1.1"
 description = "Getränkekasse"
 requires-python = ">=3.11,<3.13"
 dependencies = [
     "flet==1.0.3",
     "flet-lottie==1.0.3",
-    "flet-camera==1.0.3",
     "pyjnius==1.6.1"
 ]
 

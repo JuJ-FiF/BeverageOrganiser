@@ -6,15 +6,7 @@ import flet as ft
 
 from Utils.classes import Expense
 from Utils.animations import booking_animation
-from Utils.receipts import (
-    save_receipt,
-    read_receipt,
-    delete_receipt,
-    receipt_exists,
-    get_receipt_path
-)
-from Utils.receipt_ocr import recognize_receipt_text
-from Utils.receipt_parser import parse_receipt
+from Utils.receipts import save_receipt, read_receipt, delete_receipt, receipt_exists
 
 
 class OverviewScreen(ft.Column):
@@ -141,20 +133,17 @@ class OverviewScreen(ft.Column):
                 expense.receipt
             )
 
-            title = (
-                expense.merchant
-                if getattr(expense, "merchant", None)
-                else expense.title
+            receipt_icon = (
+                ft.Icons.RECEIPT_LONG
+                if has_receipt
+                else None
             )
-
-            if not title:
-                title = "Ausgabe"
 
             title_content = ft.Row(
                 spacing=8,
                 controls=[
                     ft.Text(
-                        title.replace(
+                        expense.title.replace(
                             ", ",
                             ",\n"
                         ),
@@ -178,38 +167,6 @@ class OverviewScreen(ft.Column):
                     )
                 )
 
-            # -------------------------------------------------
-            # DATUM
-            # -------------------------------------------------
-
-            receipt_date = getattr(
-                expense,
-                "receipt_date",
-                None
-            )
-
-            if receipt_date:
-
-                subtitle_text = (
-                    f"Belegdatum: {receipt_date}"
-                )
-
-            else:
-
-                subtitle_text = (
-                    f"Datum: {expense.date}"
-                )
-
-            # -------------------------------------------------
-            # GETRÄNKE
-            # -------------------------------------------------
-
-            if expense.title:
-
-                subtitle_text += (
-                    f"\n{expense.title}"
-                )
-
             tile = ft.Container(
                 bgcolor="#D7C9A8",
                 border_radius=10,
@@ -219,12 +176,10 @@ class OverviewScreen(ft.Column):
                 ),
                 content=ft.ListTile(
                     title=title_content,
-
                     subtitle=ft.Text(
-                        subtitle_text,
+                        f"Datum: {expense.date}",
                         color=ft.Colors.BLACK_87
                     ),
-
                     trailing=ft.Text(
                         f"-{expense.amount:.2f} €",
                         size=16,
@@ -232,11 +187,9 @@ class OverviewScreen(ft.Column):
                         color=ft.Colors.RED_400,
                         text_align=ft.TextAlign.RIGHT
                     ),
-
                     content_padding=ft.Padding.only(
                         right=16
                     ),
-
                     on_click=(
                         lambda e, exp=expense:
                         self.show_expense_details(exp)
@@ -269,11 +222,9 @@ class OverviewScreen(ft.Column):
         )
 
         if not receipt_data:
-
             self.show_message(
                 "Der Beleg konnte nicht gefunden werden."
             )
-
             return
 
         image = ft.Image(
@@ -283,75 +234,28 @@ class OverviewScreen(ft.Column):
             height=480
         )
 
-        merchant = getattr(
-            expense,
-            "merchant",
-            None
-        )
-
-        receipt_date = getattr(
-            expense,
-            "receipt_date",
-            None
-        )
-
-        info_controls = []
-
-        if merchant:
-
-            info_controls.append(
-                ft.Text(
-                    merchant,
-                    size=18,
-                    weight=ft.FontWeight.BOLD
-                )
-            )
-
-        if receipt_date:
-
-            info_controls.append(
-                ft.Text(
-                    f"Belegdatum: {receipt_date}"
-                )
-            )
-
-        info_controls.append(
-            ft.Text(
-                f"{expense.amount:.2f} €"
-            )
-        )
-
-        if expense.title:
-
-            info_controls.append(
-                ft.Text(
-                    expense.title,
-                    size=13
-                )
-            )
-
-        info_controls.extend(
-            [
-                ft.Divider(),
-                image
-            ]
-        )
-
         dialog = ft.AlertDialog(
             modal=True,
-
             title=ft.Text(
                 "Beleg"
             ),
-
             content=ft.Column(
                 tight=True,
                 horizontal_alignment=(
                     ft.CrossAxisAlignment.CENTER
                 ),
-                controls=info_controls
+                controls=[
+                    ft.Text(
+                        expense.title,
+                        weight=ft.FontWeight.BOLD
+                    ),
+                    ft.Text(
+                        f"{expense.amount:.2f} €"
+                    ),
+                    ft.Divider(),
+                    image
+                ]
             ),
-
             actions=[
                 ft.TextButton(
                     "Schließen",
@@ -374,7 +278,7 @@ class OverviewScreen(ft.Column):
         def delete_action(e):
 
             # -------------------------------------------------
-            # 1. GETRÄNKEZÄHLER VERRINGERN
+            # 1. Getränkezähler zurücksetzen
             # -------------------------------------------------
 
             if (
@@ -392,7 +296,7 @@ class OverviewScreen(ft.Column):
                     )
 
             # -------------------------------------------------
-            # 2. BELEG LÖSCHEN
+            # 2. Beleg löschen
             # -------------------------------------------------
 
             if getattr(
@@ -406,17 +310,16 @@ class OverviewScreen(ft.Column):
                 )
 
             # -------------------------------------------------
-            # 3. AUSGABE ENTFERNEN
+            # 3. Ausgabe entfernen
             # -------------------------------------------------
 
             if expense in self.app.expense_objects:
-
                 self.app.expense_objects.remove(
                     expense
                 )
 
             # -------------------------------------------------
-            # 4. SPEICHERN
+            # 4. Daten speichern
             # -------------------------------------------------
 
             self.app.save_data()
@@ -424,7 +327,7 @@ class OverviewScreen(ft.Column):
             self.update_overview()
 
             # -------------------------------------------------
-            # 5. GETRÄNKELISTE AKTUALISIEREN
+            # 5. Getränkeliste aktualisieren
             # -------------------------------------------------
 
             if "beverage_main" in self.app.screens:
@@ -434,7 +337,7 @@ class OverviewScreen(ft.Column):
                 ].update_list()
 
             # -------------------------------------------------
-            # 6. ANIMATION
+            # 6. Animation
             # -------------------------------------------------
 
             asyncio.create_task(
@@ -445,16 +348,13 @@ class OverviewScreen(ft.Column):
             )
 
             self.app.page.pop_dialog()
-
             self.app.page.update()
 
         dialog = ft.AlertDialog(
             modal=True,
-
             title=ft.Text(
                 "Ausgabe löschen"
             ),
-
             content=ft.Text(
                 f'Möchtest du die Ausgabe '
                 f'"{expense.title}" '
@@ -463,14 +363,12 @@ class OverviewScreen(ft.Column):
                 f'Die gebuchten Getränke werden '
                 f'vom Gesamtzähler abgezogen.'
             ),
-
             actions=[
                 ft.TextButton(
                     "Abbrechen",
                     on_click=lambda e:
                     self.app.page.pop_dialog()
                 ),
-
                 ft.FilledButton(
                     "Löschen",
                     on_click=delete_action
@@ -488,29 +386,11 @@ class OverviewScreen(ft.Column):
 
     def open_add_expense_dialog(self, e=None):
 
-        # -----------------------------------------------------
-        # FELDER
-        # -----------------------------------------------------
-
-        market_field = ft.TextField(
-            label="Markt",
-            hint_text="z.B. REWE, Kaufland, EDEKA"
-        )
-
-        date_field = ft.TextField(
-            label="Belegdatum",
-            hint_text="TT.MM.JJJJ"
-        )
-
         amount_field = ft.TextField(
-            label="Endsumme in €",
-            hint_text="z.B. 74,09",
+            label="Gesamtbetrag in €",
+            hint_text="z.B. 24.50",
             keyboard_type=ft.KeyboardType.NUMBER
         )
-
-        # -----------------------------------------------------
-        # GETRÄNKE
-        # -----------------------------------------------------
 
         session_counts = {
             beverage: 0
@@ -525,29 +405,13 @@ class OverviewScreen(ft.Column):
         )
 
         # -----------------------------------------------------
-        # OCR-STATUS
-        # -----------------------------------------------------
-
-        ocr_status = ft.Text(
-            "",
-            size=12,
-            color=ft.Colors.GREY_600
-        )
-
-        ocr_button = ft.FilledTonalButton(
-            "Beleg automatisch auslesen",
-            icon=ft.Icons.DOCUMENT_SCANNER,
-        )
-
-        # -----------------------------------------------------
         # BELEG-STATUS
         # -----------------------------------------------------
 
         receipt_data = {
             "bytes": None,
             "extension": ".jpg",
-            "name": None,
-            "path": None
+            "name": None
         }
 
         receipt_preview = ft.Container(
@@ -571,31 +435,9 @@ class OverviewScreen(ft.Column):
             visible=False
         )
 
-        # =====================================================
-        # HILFSFUNKTIONEN
-        # =====================================================
-
-        def clear_error(field):
-
-            if field.error_text:
-
-                field.error_text = None
-
-        # =====================================================
-        # GETRÄNKEZÄHLER AKTUALISIEREN
-        # =====================================================
-
-        def update_count_label(beverage):
-
-            count_labels[
-                beverage
-            ].value = (
-                f"{session_counts[beverage]}x"
-            )
-
-        # =====================================================
-        # BELEG-VORSCHAU
-        # =====================================================
+        # -----------------------------------------------------
+        # BELEG-VORSCHAU AKTUALISIEREN
+        # -----------------------------------------------------
 
         def update_receipt_preview():
 
@@ -612,10 +454,7 @@ class OverviewScreen(ft.Column):
 
                 remove_receipt_button.visible = False
 
-                ocr_button.disabled = True
-
                 self.app.page.update()
-
                 return
 
             receipt_preview.content = ft.Image(
@@ -628,81 +467,35 @@ class OverviewScreen(ft.Column):
             receipt_preview.visible = True
 
             if receipt_data["name"]:
-
                 receipt_status.value = (
                     f"Beleg: {receipt_data['name']}"
                 )
-
             else:
-
                 receipt_status.value = (
                     "Foto aufgenommen"
                 )
 
             remove_receipt_button.visible = True
 
-            ocr_button.disabled = False
-
             self.app.page.update()
 
-        # =====================================================
+        # -----------------------------------------------------
         # BELEG ENTFERNEN
-        # =====================================================
+        # -----------------------------------------------------
 
         def remove_receipt(e=None):
-
-            if receipt_data["path"]:
-
-                delete_receipt(
-                    receipt_data["path"]
-                )
 
             receipt_data["bytes"] = None
             receipt_data["name"] = None
             receipt_data["extension"] = ".jpg"
-            receipt_data["path"] = None
-
-            ocr_status.value = ""
 
             update_receipt_preview()
 
         remove_receipt_button.on_click = remove_receipt
 
-        # =====================================================
-        # TEMPORÄREN BELEG SPEICHERN
-        # =====================================================
-
-        def save_receipt_for_ocr():
-
-            if not receipt_data["bytes"]:
-                return False
-
-            # Bereits gespeichert
-            if receipt_data["path"]:
-
-                return True
-
-            try:
-
-                receipt_data["path"] = save_receipt(
-                    receipt_data["bytes"],
-                    receipt_data["extension"]
-                )
-
-                return True
-
-            except Exception as ex:
-
-                print(
-                    "Temporary receipt save error:",
-                    ex
-                )
-
-                return False
-
-        # =====================================================
-        # BILD AUSWÄHLEN
-        # =====================================================
+        # -----------------------------------------------------
+        # BILD AUS GALERIE / DATEI AUSWÄHLEN
+        # -----------------------------------------------------
 
         async def pick_receipt(e=None):
 
@@ -731,19 +524,10 @@ class OverviewScreen(ft.Column):
                 selected = files[0]
 
                 if not selected.bytes:
-
                     self.show_message(
                         "Das Bild konnte nicht gelesen werden."
                     )
-
                     return
-
-                # Alten temporären Beleg löschen
-                if receipt_data["path"]:
-
-                    delete_receipt(
-                        receipt_data["path"]
-                    )
 
                 extension = Path(
                     selected.name
@@ -755,7 +539,6 @@ class OverviewScreen(ft.Column):
                     ".png",
                     ".webp"
                 ]:
-
                     extension = ".jpg"
 
                 receipt_data["bytes"] = (
@@ -770,10 +553,6 @@ class OverviewScreen(ft.Column):
                     selected.name
                 )
 
-                receipt_data["path"] = None
-
-                ocr_status.value = ""
-
                 update_receipt_preview()
 
             except Exception as ex:
@@ -787,9 +566,9 @@ class OverviewScreen(ft.Column):
                     ex
                 )
 
-        # =====================================================
+        # -----------------------------------------------------
         # FOTO AUFNEHMEN
-        # =====================================================
+        # -----------------------------------------------------
 
         async def take_receipt_photo(e=None):
 
@@ -834,6 +613,7 @@ class OverviewScreen(ft.Column):
 
                     return
 
+                # Bevorzugt die Rückkamera.
                 selected_camera = next(
                     (
                         item
@@ -871,21 +651,11 @@ class OverviewScreen(ft.Column):
 
                             return
 
-                        # Alten Beleg löschen
-                        if receipt_data["path"]:
-
-                            delete_receipt(
-                                receipt_data["path"]
-                            )
-
                         receipt_data["bytes"] = data
                         receipt_data["extension"] = ".jpg"
                         receipt_data["name"] = (
                             "Aufgenommenes Foto"
                         )
-                        receipt_data["path"] = None
-
-                        ocr_status.value = ""
 
                         self.app.page.pop_dialog()
 
@@ -904,24 +674,20 @@ class OverviewScreen(ft.Column):
 
                 camera_dialog = ft.AlertDialog(
                     modal=True,
-
                     title=ft.Text(
                         "Beleg fotografieren"
                     ),
-
                     content=ft.Container(
                         width=320,
                         height=420,
                         content=camera
                     ),
-
                     actions=[
                         ft.TextButton(
                             "Abbrechen",
                             on_click=lambda e:
                             self.app.page.pop_dialog()
                         ),
-
                         ft.FilledButton(
                             "Foto aufnehmen",
                             icon=ft.Icons.PHOTO_CAMERA,
@@ -947,23 +713,21 @@ class OverviewScreen(ft.Column):
                     "Kamera konnte nicht gestartet werden."
                 )
 
-        # =====================================================
-        # GETRÄNK HINZUFÜGEN
-        # =====================================================
+        # -----------------------------------------------------
+        # GETRÄNKE
+        # -----------------------------------------------------
 
         def increment_beverage(beverage):
 
             session_counts[beverage] += 1
 
-            update_count_label(
+            count_labels[
                 beverage
+            ].value = (
+                f"{session_counts[beverage]}x"
             )
 
             self.app.page.update()
-
-        # =====================================================
-        # AUSWAHL ZURÜCKSETZEN
-        # =====================================================
 
         def reset_counts(e=None):
 
@@ -971,15 +735,11 @@ class OverviewScreen(ft.Column):
 
                 session_counts[beverage] = 0
 
-                update_count_label(
+                count_labels[
                     beverage
-                )
+                ].value = "0x"
 
             self.app.page.update()
-
-        # =====================================================
-        # GETRÄNKELISTE
-        # =====================================================
 
         for beverage in self.app.beverage_objects:
 
@@ -998,9 +758,7 @@ class OverviewScreen(ft.Column):
                     f"{beverage.name} "
                     f"(Gesamt: {beverage.count})"
                 ),
-
                 trailing=count_label,
-
                 on_click=(
                     lambda e, b=beverage:
                     increment_beverage(b)
@@ -1016,236 +774,26 @@ class OverviewScreen(ft.Column):
                 title=ft.Text(
                     "Auswahl leeren"
                 ),
-
                 leading=ft.Icon(
                     ft.Icons.CLEAR
                 ),
-
                 on_click=reset_counts
             )
         )
 
-        # =====================================================
-        # OCR
-        # =====================================================
-
-        async def run_ocr(e=None):
-
-            if not receipt_data["bytes"]:
-
-                self.show_message(
-                    "Bitte zuerst einen Beleg auswählen "
-                    "oder fotografieren."
-                )
-
-                return
-
-            if not save_receipt_for_ocr():
-
-                self.show_message(
-                    "Der Beleg konnte für die "
-                    "Texterkennung nicht gespeichert werden."
-                )
-
-                return
-
-            ocr_button.disabled = True
-
-            ocr_status.value = (
-                "Beleg wird automatisch ausgelesen …"
-            )
-
-            self.app.page.update()
-
-            try:
-
-                receipt_path = get_receipt_path(
-                    receipt_data["path"]
-                )
-
-                if not receipt_path:
-
-                    raise RuntimeError(
-                        "Der Pfad zum Beleg konnte nicht ermittelt werden."
-                    )
-
-                # OCR nicht auf dem UI-Thread ausführen.
-                raw_text = await asyncio.to_thread(
-                    recognize_receipt_text,
-                    str(receipt_path)
-                )
-
-                if not raw_text:
-
-                    raise RuntimeError(
-                        "Auf dem Beleg wurde kein Text erkannt."
-                    )
-
-                # -------------------------------------------------
-                # OCR-TEXT AUSWERTEN
-                # -------------------------------------------------
-
-                result = parse_receipt(
-                    raw_text,
-                    self.app.beverage_objects
-                )
-
-                self._last_ocr_matches = result.get(
-                    "matches",
-                    []
-                )
-
-                # -------------------------------------------------
-                # DATUM
-                # -------------------------------------------------
-
-                detected_date = result.get(
-                    "date"
-                )
-
-                if detected_date:
-
-                    date_field.value = (
-                        detected_date
-                    )
-
-                # -------------------------------------------------
-                # MARKT
-                # -------------------------------------------------
-
-                detected_market = result.get(
-                    "market"
-                )
-
-                if detected_market:
-
-                    market_field.value = (
-                        detected_market
-                    )
-
-                # -------------------------------------------------
-                # ENDSUMME
-                # -------------------------------------------------
-
-                detected_total = result.get(
-                    "total"
-                )
-
-                if detected_total is not None:
-
-                    amount_field.value = (
-                        f"{detected_total:.2f}"
-                    )
-
-                # -------------------------------------------------
-                # ERKANNTE GETRÄNKE
-                # -------------------------------------------------
-
-                detected_items = result.get(
-                    "items",
-                    {}
-                )
-
-                # Erst aktuelle Auswahl löschen
-                for beverage in session_counts:
-
-                    session_counts[
-                        beverage
-                    ] = 0
-
-                    update_count_label(
-                        beverage
-                    )
-
-                # Dann OCR-Ergebnis übernehmen
-                for beverage, count in (
-                    detected_items.items()
-                ):
-
-                    if beverage not in session_counts:
-                        continue
-
-                    session_counts[
-                        beverage
-                    ] = int(count)
-
-                    update_count_label(
-                        beverage
-                    )
-
-                # -------------------------------------------------
-                # ERGEBNIS
-                # -------------------------------------------------
-
-                matched_count = len(
-                    detected_items
-                )
-
-                unmatched = result.get(
-                    "unmatched",
-                    []
-                )
-
-                if unmatched:
-
-                    ocr_status.value = (
-                        f"{matched_count} Getränkesorten erkannt. "
-                        f"{len(unmatched)} Position(en) "
-                        f"nicht eindeutig erkannt."
-                    )
-
-                else:
-
-                    ocr_status.value = (
-                        f"Beleg erkannt: "
-                        f"{matched_count} Getränkesorten."
-                    )
-
-                self.app.page.update()
-
-            except Exception as ex:
-
-                print(
-                    "OCR error:",
-                    ex
-                )
-
-                ocr_status.value = (
-                    "Beleg konnte nicht automatisch "
-                    "ausgelesen werden."
-                )
-
-                self.show_message(
-                    "Die automatische Belegerkennung "
-                    "konnte nicht durchgeführt werden.\n\n"
-                    f"Fehler:\n{ex}"
-                )
-
-            finally:
-
-                ocr_button.disabled = False
-
-                self.app.page.update()
-
-        ocr_button.on_click = run_ocr
-
-        # =====================================================
+        # -----------------------------------------------------
         # BELEG-BEREICH
-        # =====================================================
+        # -----------------------------------------------------
 
         receipt_section = ft.Container(
             padding=10,
-
             border_radius=10,
-
             bgcolor=ft.Colors.with_opacity(
                 0.05,
                 ft.Colors.ON_SURFACE
             ),
-
             content=ft.Column(
                 spacing=8,
-
                 controls=[
 
                     ft.Text(
@@ -1256,7 +804,6 @@ class OverviewScreen(ft.Column):
                     ft.Row(
                         wrap=True,
                         spacing=8,
-
                         controls=[
 
                             ft.OutlinedButton(
@@ -1269,28 +816,20 @@ class OverviewScreen(ft.Column):
                                 "Foto aufnehmen",
                                 icon=ft.Icons.PHOTO_CAMERA,
                                 on_click=take_receipt_photo
-                            ),
-
-                            ocr_button
+                            )
                         ]
                     ),
 
-                    ocr_status,
-
                     ft.Row(
                         spacing=12,
-
                         vertical_alignment=(
                             ft.CrossAxisAlignment.CENTER
                         ),
-
                         controls=[
                             receipt_preview,
-
                             ft.Column(
                                 tight=True,
                                 spacing=4,
-
                                 controls=[
                                     receipt_status,
                                     remove_receipt_button
@@ -1302,31 +841,11 @@ class OverviewScreen(ft.Column):
             )
         )
 
-        # =====================================================
+        # -----------------------------------------------------
         # SPEICHERN
-        # =====================================================
+        # -----------------------------------------------------
 
         def save(e):
-
-            # -------------------------------------------------
-            # FELD-FEHLER ZURÜCKSETZEN
-            # -------------------------------------------------
-
-            clear_error(
-                amount_field
-            )
-
-            clear_error(
-                market_field
-            )
-
-            clear_error(
-                date_field
-            )
-
-            # -------------------------------------------------
-            # GETRÄNKE
-            # -------------------------------------------------
 
             selected_items = [
                 f"{count}x {beverage.name}"
@@ -1338,10 +857,6 @@ class OverviewScreen(ft.Column):
             title = ", ".join(
                 selected_items
             )
-
-            # -------------------------------------------------
-            # BETRAG
-            # -------------------------------------------------
 
             amount_raw = (
                 amount_field.value.strip()
@@ -1371,23 +886,12 @@ class OverviewScreen(ft.Column):
 
             try:
 
-                if "," in amount_raw:
-
-                    amount = float(
-                        amount_raw.replace(
-                            ".",
-                            ""
-                        ).replace(
-                            ",",
-                            "."
-                        )
+                amount = float(
+                    amount_raw.replace(
+                        ",",
+                        "."
                     )
-
-                else:
-
-                    amount = float(
-                        amount_raw
-                    )
+                )
 
             except ValueError:
 
@@ -1399,18 +903,8 @@ class OverviewScreen(ft.Column):
 
                 return
 
-            if amount < 0:
-
-                amount_field.error_text = (
-                    "Der Betrag darf nicht negativ sein."
-                )
-
-                amount_field.update()
-
-                return
-
             # -------------------------------------------------
-            # GEKAUFTE GETRÄNKE
+            # Gekaufte Getränke
             # -------------------------------------------------
 
             purchased_items = {
@@ -1421,38 +915,12 @@ class OverviewScreen(ft.Column):
             }
 
             # -------------------------------------------------
-            # MARKT
+            # Beleg dauerhaft speichern
             # -------------------------------------------------
 
-            merchant = (
-                market_field.value.strip()
-                if market_field.value
-                else None
-            )
+            receipt_path = None
 
-            if not merchant:
-                merchant = None
-
-            # -------------------------------------------------
-            # DATUM
-            # -------------------------------------------------
-
-            receipt_date = (
-                date_field.value.strip()
-                if date_field.value
-                else None
-            )
-
-            if not receipt_date:
-                receipt_date = None
-
-            # -------------------------------------------------
-            # BELEG
-            # -------------------------------------------------
-
-            receipt_path = receipt_data["path"]
-
-            if receipt_data["bytes"] and not receipt_path:
+            if receipt_data["bytes"]:
 
                 try:
 
@@ -1477,16 +945,14 @@ class OverviewScreen(ft.Column):
                     return
 
             # -------------------------------------------------
-            # EXPENSE ERSTELLEN
+            # Expense erstellen
             # -------------------------------------------------
 
             new_expense = Expense(
                 title=title,
                 amount=amount,
                 items=purchased_items,
-                receipt=receipt_path,
-                merchant=merchant,
-                receipt_date=receipt_date
+                receipt=receipt_path
             )
 
             self.app.expense_objects.append(
@@ -1494,7 +960,7 @@ class OverviewScreen(ft.Column):
             )
 
             # -------------------------------------------------
-            # GETRÄNKEZÄHLER ERHÖHEN
+            # Getränkezähler erhöhen
             # -------------------------------------------------
 
             for beverage, added_count in (
@@ -1504,63 +970,7 @@ class OverviewScreen(ft.Column):
                 beverage.count += added_count
 
             # -------------------------------------------------
-            # OCR-ALIASE LERNEN
-            #
-            # Die Parser-Ergebnisse enthalten die ursprünglich
-            # erkannten Bezeichnungen.
-            #
-            # Beispiel:
-            #
-            # REWE-Beleg:
-            # "UR KROE 20X0,5"
-            #
-            # -> Ur-Krostitzer
-            #
-            # Dieser Name kann anschließend als
-            # Markt-Alias gespeichert werden.
-            # -------------------------------------------------
-
-            # Die Alias-Übernahme erfolgt über das Ergebnis,
-            # das während der OCR gespeichert wurde.
-            #
-            # Falls receipt_parser eine Liste "matches"
-            # liefert, werden die bestätigten Zuordnungen
-            # hier übernommen.
-
-            ocr_matches = getattr(
-                self,
-                "_last_ocr_matches",
-                []
-            )
-
-            for match in ocr_matches:
-
-                beverage = match.get(
-                    "beverage"
-                )
-
-                raw_name = match.get(
-                    "raw_name"
-                )
-
-                if not beverage or not raw_name:
-                    continue
-
-                if beverage not in purchased_items:
-                    continue
-
-                if hasattr(
-                    beverage,
-                    "add_alias"
-                ):
-
-                    beverage.add_alias(
-                        raw_name,
-                        merchant
-                    )
-
-            # -------------------------------------------------
-            # SPEICHERN
+            # Speichern
             # -------------------------------------------------
 
             self.app.save_data()
@@ -1574,7 +984,7 @@ class OverviewScreen(ft.Column):
                 ].update_list()
 
             # -------------------------------------------------
-            # ANIMATION
+            # Animation
             # -------------------------------------------------
 
             asyncio.create_task(
@@ -1585,61 +995,36 @@ class OverviewScreen(ft.Column):
             )
 
             self.app.page.pop_dialog()
-
             self.app.page.update()
 
-        # =====================================================
+        # -----------------------------------------------------
         # DIALOG
-        # =====================================================
+        # -----------------------------------------------------
 
         dialog = ft.AlertDialog(
             modal=True,
-
             title=ft.Text(
                 "Ausgabe buchen"
             ),
-
             content=ft.Container(
                 width=420,
-
                 content=ft.Column(
                     controls=[
-
-                        market_field,
-
-                        date_field,
-
-                        amount_field,
-
-                        ft.Divider(),
-
-                        ft.Text(
-                            "Getränke",
-                            weight=ft.FontWeight.BOLD
-                        ),
-
                         beverage_list,
-
+                        amount_field,
                         receipt_section
-
                     ],
-
                     tight=True,
-
                     spacing=12,
-
                     scroll=ft.ScrollMode.AUTO
                 )
             ),
-
             actions=[
-
                 ft.TextButton(
                     "Abbrechen",
                     on_click=lambda e:
                     self.app.page.pop_dialog()
                 ),
-
                 ft.FilledButton(
                     "Buchen",
                     icon=ft.Icons.SAVE,
@@ -1648,38 +1033,9 @@ class OverviewScreen(ft.Column):
             ]
         )
 
-        # -----------------------------------------------------
-        # BELEG ZUM OCR-PARSER ÜBERGEBEN
-        # -----------------------------------------------------
-        #
-        # Wir überschreiben run_ocr mit einer kleinen Erweiterung,
-        # damit die gefundenen Alias-Zuordnungen für save()
-        # verfügbar bleiben.
-        #
-        # Die eigentliche OCR-Funktion bleibt oben.
-        #
-
-        original_run_ocr = run_ocr
-
-        async def run_ocr_with_matches(e=None):
-
-            self._last_ocr_matches = []
-
-            await original_run_ocr(
-                e
-            )
-
-        ocr_button.on_click = run_ocr_with_matches
-
-        # =====================================================
-        # DIALOG ANZEIGEN
-        # =====================================================
-
         self.app.page.show_dialog(
             dialog
         )
-
-        update_receipt_preview()
 
     # =========================================================
     # NACHRICHT
@@ -1689,15 +1045,12 @@ class OverviewScreen(ft.Column):
 
         dialog = ft.AlertDialog(
             modal=True,
-
             title=ft.Text(
                 "Hinweis"
             ),
-
             content=ft.Text(
                 message
             ),
-
             actions=[
                 ft.TextButton(
                     "OK",
@@ -1716,5 +1069,4 @@ class OverviewScreen(ft.Column):
     # =========================================================
 
     def refresh(self):
-
         self.update_overview()
