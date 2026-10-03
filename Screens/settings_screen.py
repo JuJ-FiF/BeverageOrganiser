@@ -4,8 +4,6 @@ import flet as ft
 from Utils.classes import Person, Expense, Beverage
 from Utils.updater import check_for_update, download_and_install_update
 from Utils.version import APP_VERSION
-from Utils.logger import log, log_error
-
 
 
 class SettingsScreen(ft.Column):
