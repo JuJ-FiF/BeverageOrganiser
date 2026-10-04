@@ -1,7 +1,7 @@
 import flet as ft
 
 from Utils.classes import Beverage
-
+from Screens.dialogs import show_confirmation_dialog
 
 class BeverageScreen(ft.Column):
 
@@ -162,27 +162,14 @@ class BeverageScreen(ft.Column):
             self.update_list()
             self.app.page.pop_dialog()
 
-        dialog = ft.AlertDialog(
-            modal=True,
-            title=ft.Text("Sorte löschen"),
-            content=ft.Text(
-                f'Möchtest du "{beverage.name}" '
-                f'wirklich aus der Sortenauswahl entfernen?'
-            ),
-            actions=[
-                ft.TextButton(
-                    "Abbrechen",
-                    on_click=lambda e:
-                        self.app.page.pop_dialog(),
-                ),
-                ft.FilledButton(
-                    "Löschen",
-                    on_click=delete_action,
-                ),
-            ],
+        show_confirmation_dialog(
+            self.app.page,
+            "Sorte löschen",
+            f'Möchtest du "{beverage.name}" '
+            "wirklich aus der Sortenauswahl entfernen?",
+            "Löschen",
+            delete_action,
         )
-
-        self.app.page.show_dialog(dialog)
 
     # ---------------------------------------------------------
     # REFRESH

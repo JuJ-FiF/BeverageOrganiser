@@ -40,5 +40,7 @@ Thumbs.db
 
 # Projektspezifisch
 data.json
+data.json.bak
+.data.json.*.tmp
 release.ps1
 receipts/

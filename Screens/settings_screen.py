@@ -1,10 +1,15 @@
+import copy
 import json
 import flet as ft
 
-from Utils.classes import Person, Expense, Beverage
+from Utils.data_transfer import (
+    build_import_data,
+    create_export_data,
+    validate_import_data,
+)
+from Screens.dialogs import show_confirmation_dialog, show_message_dialog
 from Utils.updater import check_for_update, download_and_install_update
 from Utils.version import APP_VERSION
-
 
 class SettingsScreen(ft.Column):
 
@@ -156,21 +161,11 @@ class SettingsScreen(ft.Column):
     # =========================================================
 
     def create_export_data(self):
-
-        return {
-            "persons": [
-                person.to_dict()
-                for person in self.app.person_objects
-            ],
-            "expenses": [
-                expense.to_dict()
-                for expense in self.app.expense_objects
-            ],
-            "beverages": [
-                beverage.to_dict()
-                for beverage in self.app.beverage_objects
-            ]
-        }
+        return create_export_data(
+            self.app.person_objects,
+            self.app.expense_objects,
+            self.app.beverage_objects,
+        )
 
     # =========================================================
     # EXPORT
@@ -239,25 +234,7 @@ class SettingsScreen(ft.Column):
                 selected_file.bytes.decode("utf-8")
             )
 
-            if not isinstance(data, dict):
-                raise ValueError(
-                    "Die Datei enthält keine gültige Datenstruktur."
-                )
-
-            if "persons" not in data:
-                raise ValueError(
-                    "Der Bereich 'persons' fehlt."
-                )
-
-            if "expenses" not in data:
-                raise ValueError(
-                    "Der Bereich 'expenses' fehlt."
-                )
-
-            if "beverages" not in data:
-                raise ValueError(
-                    "Der Bereich 'beverages' fehlt."
-                )
+            validate_import_data(data)
 
             self.confirm_import(data)
 
@@ -288,30 +265,31 @@ class SettingsScreen(ft.Column):
         def perform_import(e):
 
             try:
+                previous_state = (
+                    self.app.person_objects,
+                    self.app.expense_objects,
+                    self.app.beverage_objects,
+                )
+                persons, expenses, beverages = build_import_data(data)
+                self.app.person_objects = persons
+                self.app.expense_objects = expenses
+                self.app.beverage_objects = beverages
 
-                # Personen
-                self.app.person_objects.clear()
+                if not self.app.save_data():
+                    (
+                        self.app.person_objects,
+                        self.app.expense_objects,
+                        self.app.beverage_objects,
+                    ) = previous_state
+                    self.app.page.pop_dialog()
+                    self.app.refresh_all_screens()
+                    self.show_dialog(
+                        "Speichern fehlgeschlagen",
+                        "Der Import wurde nicht übernommen. "
+                        "Die bisherigen Daten bleiben erhalten.",
+                    )
+                    return
 
-                for person_data in data["persons"]:
-                    person = Person.from_dict(person_data)
-                    self.app.person_objects.append(person)
-
-                # Ausgaben
-                self.app.expense_objects.clear()
-
-                for expense_data in data["expenses"]:
-                    expense = Expense.from_dict(expense_data, self.app.beverage_objects)
-                    self.app.expense_objects.append(expense)
-
-                # Getränke
-                self.app.beverage_objects.clear()
-
-                for beverage_data in data["beverages"]:
-                    beverage = Beverage.from_dict(beverage_data)
-                    self.app.beverage_objects.append(beverage)
-
-                # Speichern
-                self.app.save_data()
                 self.app.page.pop_dialog()
                 self.app.refresh_all_screens()
 
@@ -332,29 +310,18 @@ class SettingsScreen(ft.Column):
                     f"Fehler beim Übernehmen der Daten:\n{ex}"
                 )
 
-        dialog = ft.AlertDialog(
-            modal=True,
-            title=ft.Text("Daten importieren"),
-            content=ft.Text(
-                "Möchtest du die aktuellen Daten wirklich durch die importierten Daten ersetzen?\n\n"
-                f"Personen: {person_count}\n"
-                f"Ausgaben: {expense_count}\n"
-                f"Getränkesorten: {beverage_count}\n\n"
-                "Dieser Vorgang kann nicht rückgängig gemacht werden."
-            ),
-            actions=[
-                ft.TextButton(
-                    "Abbrechen",
-                    on_click=lambda e: self.app.page.pop_dialog()
-                ),
-                ft.FilledButton(
-                    "Importieren",
-                    on_click=perform_import
-                )
-            ]
+        show_confirmation_dialog(
+            self.app.page,
+            "Daten importieren",
+            "Möchtest du die aktuellen Daten wirklich durch die "
+            "importierten Daten ersetzen?\n\n"
+            f"Personen: {person_count}\n"
+            f"Ausgaben: {expense_count}\n"
+            f"Getränkesorten: {beverage_count}\n\n"
+            "Dieser Vorgang kann nicht rückgängig gemacht werden.",
+            "Importieren",
+            perform_import,
         )
-
-        self.app.page.show_dialog(dialog)
 
     # =========================================================
     # RESET
@@ -363,6 +330,11 @@ class SettingsScreen(ft.Column):
     def confirm_reset_all(self, e=None):
 
         def perform_reset(_):
+            previous_state = copy.deepcopy((
+                self.app.person_objects,
+                self.app.expense_objects,
+                self.app.beverage_objects,
+            ))
 
             # Personen-Buchungen löschen
             for person in self.app.person_objects:
@@ -377,7 +349,21 @@ class SettingsScreen(ft.Column):
             for beverage in self.app.beverage_objects:
                 beverage.count = 0
 
-            self.app.save_data()
+            if not self.app.save_data():
+                (
+                    self.app.person_objects,
+                    self.app.expense_objects,
+                    self.app.beverage_objects,
+                ) = previous_state
+                self.app.page.pop_dialog()
+                self.app.refresh_all_screens()
+                self.show_dialog(
+                    "Speichern fehlgeschlagen",
+                    "Das Zurücksetzen wurde nicht übernommen. "
+                    "Die bisherigen Daten bleiben erhalten.",
+                )
+                return
+
             self.app.page.pop_dialog()
             self.app.refresh_all_screens()
 
@@ -387,29 +373,16 @@ class SettingsScreen(ft.Column):
                 "Ausgaben wurden auf 0 zurückgesetzt."
             )
 
-        dialog = ft.AlertDialog(
-            modal=True,
-            title=ft.Text("Kasse zurücksetzen"),
-            content=ft.Text(
-                "Möchtest du wirklich alle Guthaben, "
-                "Ausgaben und gezählten Getränke auf 0 "
-                "zurücksetzen?\n\n"
-                "Die angelegten Personen und Getränkesorten "
-                "bleiben dabei bestehen."
-            ),
-            actions=[
-                ft.TextButton(
-                    "Abbrechen",
-                    on_click=lambda e: self.app.page.pop_dialog()
-                ),
-                ft.FilledButton(
-                    "Alles zurücksetzen",
-                    on_click=perform_reset
-                )
-            ]
+        show_confirmation_dialog(
+            self.app.page,
+            "Kasse zurücksetzen",
+            "Möchtest du wirklich alle Guthaben, Ausgaben und "
+            "gezählten Getränke auf 0 zurücksetzen?\n\n"
+            "Die angelegten Personen und Getränkesorten "
+            "bleiben dabei bestehen.",
+            "Alles zurücksetzen",
+            perform_reset,
         )
-
-        self.app.page.show_dialog(dialog)
 
     # =========================================================
     # CHECK NACH UPDATES
@@ -545,7 +518,6 @@ class SettingsScreen(ft.Column):
 
             self.show_update_status()
 
-
             # ---------------------------------------------
             # APK herunterladen und Installer starten
             # ---------------------------------------------
@@ -555,7 +527,6 @@ class SettingsScreen(ft.Column):
                     download_url
                 )
             )
-
 
             # ---------------------------------------------
             # Status aktualisieren
@@ -596,26 +567,16 @@ class SettingsScreen(ft.Column):
                 f"Fehler:\n{ex}"
             )
 
-
     # =========================================================
     # ALLGEMEINER DIALOG
     # =========================================================
 
     def show_dialog(self, title, message):
-
-        dialog = ft.AlertDialog(
-            modal=True,
-            title=ft.Text(title),
-            content=ft.Text(message),
-            actions=[
-                ft.FilledButton(
-                    "OK",
-                    on_click=lambda e: self.app.page.pop_dialog()
-                )
-            ]
+        show_message_dialog(
+            self.app.page,
+            title,
+            message,
         )
-
-        self.app.page.show_dialog(dialog)
 
     # =========================================================
     # REFRESH

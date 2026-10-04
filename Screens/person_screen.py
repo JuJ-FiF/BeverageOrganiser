@@ -1,9 +1,9 @@
-import flet as ft
 import asyncio
+
+import flet as ft
 
 from Utils.classes import Person
 from Utils.animations import BUTTON_EXPAND_ON_SELECT, booking_animation
-
 
 class PersonScreen(ft.Column):
 
@@ -215,7 +215,10 @@ class PersonScreen(ft.Column):
                 return
 
             # Prüfen, ob der Name bereits existiert
-            if any(person.name.strip().lower() == name.lower() for person in self.app.person_objects):
+            if any(
+                person.name.strip().lower() == name.lower()
+                for person in self.app.person_objects
+            ):
                 field.error_text = "Diese Person existiert bereits."
                 self.app.page.update()
                 return

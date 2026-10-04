@@ -7,14 +7,12 @@ from urllib.request import Request, urlopen
 
 from Utils.version import APP_VERSION
 
-
 GITHUB_OWNER = "JuJ-FiF"
 GITHUB_REPOSITORY = "BeverageOrganiser"
 
 ANDROID_PACKAGE_NAME = "de.jujfif.beverageorganiser"
 
 APK_FILE_NAME = "BeverageOrganiser-update.apk"
-
 
 # =========================================================
 # VERSIONSVERGLEICH
@@ -108,7 +106,6 @@ def version_tuple(version):
         hotfix
     )
 
-
 def is_newer_version(
     current_version,
     latest_version
@@ -140,7 +137,6 @@ def is_newer_version(
         >
         version_tuple(current_version)
     )
-
 
 # =========================================================
 # GITHUB UPDATE PRÜFEN
@@ -273,7 +269,6 @@ async def check_for_update():
         "download_url": download_url,
     }
 
-
 # =========================================================
 # APK-DATEIPFAD
 # =========================================================
@@ -301,7 +296,6 @@ def get_update_file_path():
         storage_path
         / APK_FILE_NAME
     )
-
 
 # =========================================================
 # APK HERUNTERLADEN
@@ -374,7 +368,6 @@ def download_apk(
         )
 
     return apk_path
-
 
 # =========================================================
 # ANDROID UPDATE STARTEN
@@ -544,7 +537,6 @@ def start_android_update(
     )
 
     return True
-
 
 # =========================================================
 # UPDATE HERUNTERLADEN + INSTALLIEREN

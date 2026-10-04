@@ -1,6 +1,5 @@
 from datetime import datetime
 
-
 class Transaction:
     def __init__(self, amount, date=None):
         self.amount = float(amount)
@@ -22,7 +21,6 @@ class Transaction:
             amount=data["amount"],
             date=data["date"]
         )
-
 
 class Person:
     def __init__(self, name, transactions=None):
@@ -69,7 +67,6 @@ class Person:
                 for transaction in data.get("transactions", [])
             ]
         )
-
 
 class Expense:
 
@@ -145,7 +142,6 @@ class Expense:
             items=restored_items,
             receipt=data.get("receipt")
         )
-
 
 class Beverage:
 

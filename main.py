@@ -1,19 +1,17 @@
-import json
-import os
-from pathlib import Path
-
 import flet as ft
 
-from Utils.classes import Person, Expense, Beverage
-from Screens.person_screen import PersonScreen
-from Screens.overview_screen import OverviewScreen
 from Screens.beverage_screen import BeverageScreen
+from Screens.overview_screen import OverviewScreen
+from Screens.person_screen import PersonScreen
 from Screens.settings_screen import SettingsScreen
-
+from Utils.data_store import (
+    get_data_file_path,
+    has_saved_data_file,
+    load_data,
+    save_data,
+)
 
 class DrinkCashApp:
-    DATA_FILE_NAME = "data.json"
-
     def __init__(self, page: ft.Page):
         self.page = page
 
@@ -29,12 +27,7 @@ class DrinkCashApp:
         self.screens = {}
 
         # Speicherpfad
-        if os.getenv("FLET_APP_STORAGE_DATA"):
-            DATA_FILE = Path(os.getenv("FLET_APP_STORAGE_DATA")) / "data.json"
-        else:
-            DATA_FILE = Path(__file__).resolve().parent / "data.json"
-
-        self.data_file_path = DATA_FILE
+        self.data_file_path = get_data_file_path(__file__)
 
         self.load_data()
         self.setup_page()
@@ -166,7 +159,7 @@ class DrinkCashApp:
             "settings_main": 3
         }
 
-        self.navigation_drawer.selected_index = drawer_indices.get(screen_name,0)
+        self.navigation_drawer.selected_index = drawer_indices.get(screen_name, 0)
 
         self.page.update()
 
@@ -175,27 +168,16 @@ class DrinkCashApp:
     # ---------------------------------------------------------
 
     def load_data(self):
-        if not os.path.exists(self.data_file_path):
+        if not has_saved_data_file(self.data_file_path):
             return
 
         try:
             print(self.data_file_path)
-            with open(self.data_file_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-
-            self.person_objects = [
-                Person.from_dict(data=person) for person in data.get("persons", [])
-            ]
-
-            # 1. ZUERST die Getränke laden
-            self.beverage_objects = [
-                Beverage.from_dict(data=beverage) for beverage in data.get("beverages", [])
-            ]
-
-            # 2. DANACH die Ausgaben laden und beverage_objects übergeben
-            self.expense_objects = [
-                Expense.from_dict(data=expense, beverage_objects=self.beverage_objects) for expense in data.get("expenses", [])
-            ]
+            (
+                self.person_objects,
+                self.expense_objects,
+                self.beverage_objects,
+            ) = load_data(self.data_file_path)
 
         except Exception as e:
             print(f"Fehler beim Laden: {e}")
@@ -206,19 +188,18 @@ class DrinkCashApp:
 
     def save_data(self):
         try:
-            data = {"persons": [person.to_dict() for person in self.person_objects],
-                    "expenses": [expense.to_dict() for expense in self.expense_objects],
-                    "beverages": [beverage.to_dict() for beverage in self.beverage_objects]
-            }
-
-            os.makedirs(os.path.dirname(self.data_file_path), exist_ok=True)
-
             print(self.data_file_path)
-            with open(self.data_file_path, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=4)
+            save_data(
+                self.data_file_path,
+                self.person_objects,
+                self.expense_objects,
+                self.beverage_objects,
+            )
+            return True
 
         except Exception as e:
             print(f"Fehler beim Speichern: {e}")
+            return False
 
     # ---------------------------------------------------------
     # HILFSFUNKTION
@@ -230,12 +211,10 @@ class DrinkCashApp:
 
         self.page.update()
 
-
 def main(page: ft.Page):
     app = DrinkCashApp(page)
     app.content_area.content = app.screens["person_main"]
     page.update()
-
 
 if __name__ == "__main__":
     ft.run(main)

@@ -1,11 +1,9 @@
+import os
 from datetime import datetime
 from pathlib import Path
-import os
 import uuid
 
-
 RECEIPT_FOLDER_NAME = "receipts"
-
 
 def get_storage_directory():
     """
@@ -27,7 +25,6 @@ def get_storage_directory():
 
     return path
 
-
 def get_receipts_directory():
     """
     Liefert den Ordner für die Belegbilder.
@@ -44,7 +41,6 @@ def get_receipts_directory():
     )
 
     return directory
-
 
 def create_receipt_filename(extension=".jpg"):
     """
@@ -66,7 +62,6 @@ def create_receipt_filename(extension=".jpg"):
         f"{timestamp}_{unique_id}"
         f"{extension}"
     )
-
 
 def save_receipt(data, extension=".jpg"):
     """
@@ -97,7 +92,6 @@ def save_receipt(data, extension=".jpg"):
 
     return relative_path.as_posix()
 
-
 def get_receipt_path(receipt):
     """
     Wandelt den relativen Belegpfad
@@ -113,7 +107,6 @@ def get_receipt_path(receipt):
         return path
 
     return get_storage_directory() / path
-
 
 def read_receipt(receipt):
     """
@@ -133,7 +126,6 @@ def read_receipt(receipt):
     except OSError:
         return None
 
-
 def delete_receipt(receipt):
     """
     Löscht einen Beleg vom Gerät.
@@ -149,7 +141,6 @@ def delete_receipt(receipt):
             path.unlink()
     except OSError:
         pass
-
 
 def receipt_exists(receipt):
     """

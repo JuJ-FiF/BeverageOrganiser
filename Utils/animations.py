@@ -4,18 +4,15 @@ from pathlib import Path
 import flet as ft
 import flet_lottie as ftl
 
-
 BUTTON_EXPAND_ON_SELECT = ft.Animation(
                 duration=500,
                 curve=ft.AnimationCurve.EASE_OUT
             )
 
-
 SUCCESS_ANIMATION = "animations/success.json"
 DELETE_ANIMATION = "animations/delete.json"
 
-
-async def booking_animation(page, animation:str=""):
+async def booking_animation(page, animation: str = ""):
     """
     Spielt die Buchungsanimation einmalig
     unten mittig auf dem Bildschirm ab.
