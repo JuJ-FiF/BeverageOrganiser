@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import re
 from pathlib import Path
 from urllib.request import Request, urlopen
 
@@ -15,41 +16,135 @@ ANDROID_PACKAGE_NAME = "de.jujfif.beverageorganiser"
 APK_FILE_NAME = "BeverageOrganiser-update.apk"
 
 
+# =========================================================
+# VERSIONSVERGLEICH
+# =========================================================
+
 def version_tuple(version):
-    version = str(version).lower().lstrip("v")
+    """
+    Wandelt eine Versionsnummer in einen vergleichbaren
+    Zahlen-Tupel um.
 
-    parts = version.split(".")
+    Unterstützte Formate:
 
-    result = []
+        1.2.0
+        v1.2.0
+        1.2.0-HotFix#1
+        v1.2.0-HotFix#1
+        1.2.0-HotFix#25
 
-    for part in parts:
-        number = ""
+    Beispiele:
 
-        for character in part:
-            if character.isdigit():
-                number += character
-            else:
-                break
+        1.2.0
+            -> (1, 2, 0, 0)
 
-        result.append(
-            int(number) if number else 0
+        v1.2.0
+            -> (1, 2, 0, 0)
+
+        1.2.0-HotFix#1
+            -> (1, 2, 0, 1)
+
+        v1.2.0-HotFix#5
+            -> (1, 2, 0, 5)
+    """
+
+    version = str(
+        version
+    ).strip()
+
+    # -----------------------------------------------------
+    # Führendes "v" entfernen
+    # -----------------------------------------------------
+
+    if version.lower().startswith("v"):
+
+        version = version[1:]
+
+    # -----------------------------------------------------
+    # Hauptversion + optionalen HotFix extrahieren
+    #
+    # Beispiele:
+    #
+    # 1.2.0
+    # 1.2.0-HotFix#1
+    # -----------------------------------------------------
+
+    match = re.match(
+        r"^(\d+)"
+        r"(?:\.(\d+))?"
+        r"(?:\.(\d+))?"
+        r"(?:-HotFix#(\d+))?"
+        r"$",
+        version,
+        re.IGNORECASE
+    )
+
+    if not match:
+
+        raise ValueError(
+            f"Ungültige Versionsnummer: {version}"
         )
 
-    while len(result) < 3:
-        result.append(0)
+    major = int(
+        match.group(1)
+    )
 
-    return tuple(result[:3])
+    minor = int(
+        match.group(2) or 0
+    )
+
+    patch = int(
+        match.group(3) or 0
+    )
+
+    hotfix = int(
+        match.group(4) or 0
+    )
+
+    return (
+        major,
+        minor,
+        patch,
+        hotfix
+    )
 
 
 def is_newer_version(
     current_version,
     latest_version
 ):
+    """
+    Prüft, ob latest_version neuer als
+    current_version ist.
+
+    Beispiele:
+
+        1.2.0 -> 1.2.1
+        True
+
+        1.2.0 -> 1.2.0-HotFix#1
+        True
+
+        1.2.0-HotFix#1 -> 1.2.0-HotFix#2
+        True
+
+        1.2.0-HotFix#2 -> 1.2.0-HotFix#1
+        False
+
+        1.2.0-HotFix#99 -> 1.2.1
+        True
+    """
+
     return (
         version_tuple(latest_version)
-        > version_tuple(current_version)
+        >
+        version_tuple(current_version)
     )
 
+
+# =========================================================
+# GITHUB UPDATE PRÜFEN
+# =========================================================
 
 async def check_for_update():
 
@@ -83,24 +178,59 @@ async def check_for_update():
         load_release
     )
 
+    # -----------------------------------------------------
+    # Version aus GitHub Release
+    # -----------------------------------------------------
+
     latest_version = data.get(
         "tag_name",
         ""
     )
 
     if not latest_version:
+
         return None
 
     latest_version = (
         latest_version
+        .strip()
         .lstrip("v")
     )
+
+    # -----------------------------------------------------
+    # Versionsformat prüfen
+    # -----------------------------------------------------
+
+    try:
+
+        version_tuple(
+            latest_version
+        )
+
+    except ValueError as ex:
+
+        print(
+            "Ungültige GitHub-Version:",
+            latest_version,
+            ex
+        )
+
+        return None
+
+    # -----------------------------------------------------
+    # Update verfügbar?
+    # -----------------------------------------------------
 
     if not is_newer_version(
         APP_VERSION,
         latest_version
     ):
+
         return None
+
+    # -----------------------------------------------------
+    # APK suchen
+    # -----------------------------------------------------
 
     download_url = None
 
@@ -123,7 +253,12 @@ async def check_for_update():
             break
 
     if not download_url:
+
         return None
+
+    # -----------------------------------------------------
+    # Update zurückgeben
+    # -----------------------------------------------------
 
     return {
         "version": latest_version,
@@ -139,6 +274,10 @@ async def check_for_update():
     }
 
 
+# =========================================================
+# APK-DATEIPFAD
+# =========================================================
+
 def get_update_file_path():
 
     storage_dir = os.environ.get(
@@ -146,6 +285,7 @@ def get_update_file_path():
     )
 
     if not storage_dir:
+
         storage_dir = os.getcwd()
 
     storage_path = Path(
@@ -163,6 +303,10 @@ def get_update_file_path():
     )
 
 
+# =========================================================
+# APK HERUNTERLADEN
+# =========================================================
+
 def download_apk(
     download_url
 ):
@@ -177,8 +321,17 @@ def download_apk(
         },
     )
 
+    # -----------------------------------------------------
+    # Alte APK löschen
+    # -----------------------------------------------------
+
     if apk_path.exists():
+
         apk_path.unlink()
+
+    # -----------------------------------------------------
+    # APK herunterladen
+    # -----------------------------------------------------
 
     with urlopen(
         request,
@@ -197,9 +350,16 @@ def download_apk(
                 )
 
                 if not chunk:
+
                     break
 
-                file.write(chunk)
+                file.write(
+                    chunk
+                )
+
+    # -----------------------------------------------------
+    # Download überprüfen
+    # -----------------------------------------------------
 
     if not apk_path.exists():
 
@@ -216,7 +376,13 @@ def download_apk(
     return apk_path
 
 
-def start_android_update(apk_path):
+# =========================================================
+# ANDROID UPDATE STARTEN
+# =========================================================
+
+def start_android_update(
+    apk_path
+):
     """
     Startet den Android-Installationsdialog
     direkt über die Android-Java-API.
@@ -224,22 +390,30 @@ def start_android_update(apk_path):
 
     from jnius import autoclass, cast
 
-    apk_path = Path(apk_path)
+    apk_path = Path(
+        apk_path
+    )
+
+    # -----------------------------------------------------
+    # APK prüfen
+    # -----------------------------------------------------
 
     if not apk_path.exists():
+
         raise RuntimeError(
             "APK-Datei wurde nicht gefunden:\n"
             f"{apk_path}"
         )
 
     if apk_path.stat().st_size <= 0:
+
         raise RuntimeError(
             "APK-Datei ist leer."
         )
 
-    # -------------------------------------------------
+    # -----------------------------------------------------
     # Flet / Serious Python Activity
-    # -------------------------------------------------
+    # -----------------------------------------------------
 
     PythonActivity = autoclass(
         "com.flet.serious_python_android.PythonActivity"
@@ -251,13 +425,14 @@ def start_android_update(apk_path):
     )
 
     if activity is None:
+
         raise RuntimeError(
             "Die Android Activity ist nicht verfügbar."
         )
 
-    # -------------------------------------------------
+    # -----------------------------------------------------
     # Android-Klassen
-    # -------------------------------------------------
+    # -----------------------------------------------------
 
     Intent = autoclass(
         "android.content.Intent"
@@ -279,12 +454,9 @@ def start_android_update(apk_path):
         "androidx.core.content.FileProvider"
     )
 
-    # -------------------------------------------------
+    # -----------------------------------------------------
     # Installation aus unbekannten Quellen prüfen
-    #
-    # minSdk der App ist >= 29.
-    # Daher ist keine Build.VERSION-Prüfung notwendig.
-    # -------------------------------------------------
+    # -----------------------------------------------------
 
     package_manager = (
         activity.getPackageManager()
@@ -317,17 +489,17 @@ def start_android_update(apk_path):
             "starte das Update anschließend erneut."
         )
 
-    # -------------------------------------------------
+    # -----------------------------------------------------
     # APK als Java File
-    # -------------------------------------------------
+    # -----------------------------------------------------
 
     apk_file = File(
         str(apk_path)
     )
 
-    # -------------------------------------------------
+    # -----------------------------------------------------
     # Eigener FileProvider
-    # -------------------------------------------------
+    # -----------------------------------------------------
 
     authority = (
         ANDROID_PACKAGE_NAME
@@ -342,9 +514,9 @@ def start_android_update(apk_path):
         )
     )
 
-    # -------------------------------------------------
+    # -----------------------------------------------------
     # Android Installer
-    # -------------------------------------------------
+    # -----------------------------------------------------
 
     install_intent = Intent(
         Intent.ACTION_INSTALL_PACKAGE
@@ -363,9 +535,9 @@ def start_android_update(apk_path):
         Intent.FLAG_ACTIVITY_NEW_TASK
     )
 
-    # -------------------------------------------------
+    # -----------------------------------------------------
     # Installer starten
-    # -------------------------------------------------
+    # -----------------------------------------------------
 
     activity.startActivity(
         install_intent
@@ -373,45 +545,10 @@ def start_android_update(apk_path):
 
     return True
 
-    # -------------------------------------------------
-    # APK als Java File
-    # -------------------------------------------------
 
-    apk_file = File(str(apk_path))
-
-    # -------------------------------------------------
-    # Eigener FileProvider
-    # -------------------------------------------------
-
-    authority = (ANDROID_PACKAGE_NAME + ".updateprovider")
-
-    apk_uri = (
-        FileProvider.getUriForFile(
-            activity,
-            authority,
-            apk_file
-        )
-    )
-
-    # -------------------------------------------------
-    # Android Installer Intent
-    # -------------------------------------------------
-
-    install_intent = Intent(Intent.ACTION_INSTALL_PACKAGE)
-    install_intent.setDataAndType(apk_uri, "application/vnd.android.package-archive")
-    install_intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-    install_intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-
-    # -------------------------------------------------
-    # Installer starten
-    # -------------------------------------------------
-
-    activity.startActivity(
-        install_intent
-    )
-
-    return True
-
+# =========================================================
+# UPDATE HERUNTERLADEN + INSTALLIEREN
+# =========================================================
 
 async def download_and_install_update(
     download_url

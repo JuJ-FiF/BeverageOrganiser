@@ -3,10 +3,16 @@ import sys
 from pathlib import Path
 
 import flet as ft
+import flet_permission_handler as fph
 
 from Utils.classes import Expense
 from Utils.animations import booking_animation
-from Utils.receipts import save_receipt, read_receipt, delete_receipt, receipt_exists
+from Utils.receipts import (
+    save_receipt,
+    read_receipt,
+    delete_receipt,
+    receipt_exists,
+)
 
 
 class OverviewScreen(ft.Column):
@@ -18,6 +24,21 @@ class OverviewScreen(ft.Column):
         )
 
         self.app = app
+
+        # =====================================================
+        # BERECHTIGUNGEN
+        # =====================================================
+
+        self.permission_handler = fph.PermissionHandler()
+
+        if self.permission_handler not in self.app.page.services:
+            self.app.page.services.append(
+                self.permission_handler
+            )
+
+        # =====================================================
+        # ÜBERSICHT
+        # =====================================================
 
         self.total_income_label = ft.Text(
             "Eingesammelt: 0.00 €",
@@ -133,12 +154,6 @@ class OverviewScreen(ft.Column):
                 expense.receipt
             )
 
-            receipt_icon = (
-                ft.Icons.RECEIPT_LONG
-                if has_receipt
-                else None
-            )
-
             title_content = ft.Row(
                 spacing=8,
                 controls=[
@@ -210,6 +225,8 @@ class OverviewScreen(ft.Column):
             self.expense_list.controls.append(
                 gesture
             )
+
+        self.app.page.update()
 
     # =========================================================
     # AUSGABE DETAILS / BELEG ANZEIGEN
@@ -314,6 +331,7 @@ class OverviewScreen(ft.Column):
             # -------------------------------------------------
 
             if expense in self.app.expense_objects:
+
                 self.app.expense_objects.remove(
                     expense
                 )
@@ -379,6 +397,214 @@ class OverviewScreen(ft.Column):
         self.app.page.show_dialog(
             dialog
         )
+
+    # =========================================================
+    # KAMERA-BERECHTIGUNG
+    # =========================================================
+
+    async def request_camera_permission(self):
+        """
+        Prüft die Kamera-Berechtigung und fordert sie bei Bedarf an.
+
+        Rückgabe:
+            True  = Kamera darf verwendet werden
+            False = Kamera darf nicht verwendet werden
+        """
+
+        try:
+
+            status = await self.permission_handler.get_status(
+                fph.Permission.CAMERA
+            )
+
+            print(
+                "Camera permission status:",
+                status
+            )
+
+            # -------------------------------------------------
+            # Bereits erlaubt
+            # -------------------------------------------------
+
+            if status == fph.PermissionStatus.GRANTED:
+                return True
+
+            # -------------------------------------------------
+            # Berechtigung noch nicht erteilt
+            # -------------------------------------------------
+
+            status = await self.permission_handler.request(
+                fph.Permission.CAMERA
+            )
+
+            print(
+                "Camera permission request result:",
+                status
+            )
+
+            if status == fph.PermissionStatus.GRANTED:
+                return True
+
+            # -------------------------------------------------
+            # Dauerhaft verweigert
+            # -------------------------------------------------
+
+            if status == (
+                fph.PermissionStatus.PERMANENTLY_DENIED
+            ):
+
+                await self.show_camera_permission_dialog(
+                    permanently_denied=True
+                )
+
+                return False
+
+            # -------------------------------------------------
+            # Normal abgelehnt
+            # -------------------------------------------------
+
+            if status == fph.PermissionStatus.DENIED:
+
+                await self.show_camera_permission_dialog(
+                    permanently_denied=False
+                )
+
+                return False
+
+            # -------------------------------------------------
+            # Sonstige Zustände
+            # -------------------------------------------------
+
+            self.show_message(
+                "Der Zugriff auf die Kamera wurde "
+                "vom System nicht freigegeben."
+            )
+
+            return False
+
+        except Exception as ex:
+
+            print(
+                "Camera permission error:",
+                type(ex).__name__,
+                ex
+            )
+
+            self.show_message(
+                "Die Kamera-Berechtigung konnte nicht "
+                "angefragt werden.\n\n"
+                f"Fehler: {type(ex).__name__}: {ex}"
+            )
+
+            return False
+
+    # =========================================================
+    # KAMERA-BERECHTIGUNG DIALOG
+    # =========================================================
+
+    async def show_camera_permission_dialog(
+        self,
+        permanently_denied=False
+    ):
+        """
+        Zeigt eine verständliche Meldung an,
+        wenn der Kamerazugriff verweigert wurde.
+        """
+
+        if permanently_denied:
+
+            async def open_settings(e=None):
+
+                self.app.page.pop_dialog()
+
+                try:
+
+                    opened = (
+                        await self.permission_handler
+                        .open_app_settings()
+                    )
+
+                    if not opened:
+
+                        self.show_message(
+                            "Die Android-Einstellungen "
+                            "konnten nicht geöffnet werden.\n\n"
+                            "Bitte öffne die App-Einstellungen "
+                            "manuell und erlaube den Zugriff "
+                            "auf die Kamera."
+                        )
+
+                except Exception as ex:
+
+                    print(
+                        "Open app settings error:",
+                        type(ex).__name__,
+                        ex
+                    )
+
+                    self.show_message(
+                        "Die App-Einstellungen konnten "
+                        "nicht geöffnet werden.\n\n"
+                        "Bitte öffne die Einstellungen von "
+                        "BeverageOrganiser manuell und "
+                        "erlaube den Kamerazugriff."
+                    )
+
+            dialog = ft.AlertDialog(
+                modal=True,
+                title=ft.Text(
+                    "Kamerazugriff benötigt"
+                ),
+                content=ft.Text(
+                    "Der Zugriff auf die Kamera wurde "
+                    "dauerhaft verweigert.\n\n"
+                    "Damit du Belege fotografieren kannst, "
+                    "muss der Kamerazugriff in den "
+                    "Android-App-Einstellungen aktiviert werden."
+                ),
+                actions=[
+                    ft.TextButton(
+                        "Abbrechen",
+                        on_click=lambda e:
+                        self.app.page.pop_dialog()
+                    ),
+                    ft.FilledButton(
+                        "Einstellungen öffnen",
+                        icon=ft.Icons.SETTINGS,
+                        on_click=open_settings
+                    )
+                ]
+            )
+
+        else:
+
+            dialog = ft.AlertDialog(
+                modal=True,
+                title=ft.Text(
+                    "Kamerazugriff benötigt"
+                ),
+                content=ft.Text(
+                    "BeverageOrganiser benötigt Zugriff "
+                    "auf die Kamera, um einen Beleg zu "
+                    "fotografieren.\n\n"
+                    "Du kannst den Kamerazugriff erlauben "
+                    "oder weiterhin ein Bild aus der Galerie "
+                    "auswählen."
+                ),
+                actions=[
+                    ft.TextButton(
+                        "Abbrechen",
+                        on_click=lambda e:
+                        self.app.page.pop_dialog()
+                    )
+                ]
+            )
+
+        self.app.page.show_dialog(
+            dialog
+        )
+
+        self.app.page.update()
 
     # =========================================================
     # AUSGABE HINZUFÜGEN
@@ -524,9 +750,11 @@ class OverviewScreen(ft.Column):
                 selected = files[0]
 
                 if not selected.bytes:
+
                     self.show_message(
                         "Das Bild konnte nicht gelesen werden."
                     )
+
                     return
 
                 extension = Path(
@@ -539,6 +767,7 @@ class OverviewScreen(ft.Column):
                     ".png",
                     ".webp"
                 ]:
+
                     extension = ".jpg"
 
                 receipt_data["bytes"] = (
@@ -563,6 +792,7 @@ class OverviewScreen(ft.Column):
 
                 print(
                     "Receipt picker error:",
+                    type(ex).__name__,
                     ex
                 )
 
@@ -572,27 +802,63 @@ class OverviewScreen(ft.Column):
 
         async def take_receipt_photo(e=None):
 
+            # -------------------------------------------------
+            # Windows
+            # -------------------------------------------------
+
             if sys.platform == "win32":
 
                 self.show_message(
                     "Die Kamera ist unter Windows "
                     "in der App nicht verfügbar.\n\n"
-                    "Bitte benutze dort 'Bild auswählen'."
+                    "Bitte benutze dort "
+                    "'Bild auswählen'."
                 )
 
                 return
+
+            # -------------------------------------------------
+            # KAMERA-BERECHTIGUNG
+            # -------------------------------------------------
+
+            permission_granted = (
+                await self.request_camera_permission()
+            )
+
+            if not permission_granted:
+
+                return
+
+            # -------------------------------------------------
+            # CAMERA PLUGIN LADEN
+            # -------------------------------------------------
 
             try:
 
                 import flet_camera as fc
 
-            except ImportError:
+            except ImportError as ex:
+
+                print(
+                    "Camera import error:",
+                    type(ex).__name__,
+                    ex
+                )
 
                 self.show_message(
-                    "Das Kamera-Modul ist nicht installiert."
+                    "Das Kamera-Modul ist nicht installiert.\n\n"
+                    "Bitte installiere "
+                    "'flet-camera==1.0.3'."
                 )
 
                 return
+
+            # -------------------------------------------------
+            # KAMERA ERSTELLEN
+            # -------------------------------------------------
+
+            camera = None
+            camera_dialog = None
 
             try:
 
@@ -601,19 +867,130 @@ class OverviewScreen(ft.Column):
                     preview_enabled=True
                 )
 
+                # -------------------------------------------------
+                # WICHTIG:
+                #
+                # Die Camera muss zuerst Bestandteil eines
+                # sichtbaren Flet-Control-Baums sein.
+                #
+                # Deshalb wird der Dialog ZUERST angezeigt und
+                # erst danach get_available_cameras()/initialize()
+                # aufgerufen.
+                # -------------------------------------------------
+
+                async def capture_photo(e=None):
+
+                    try:
+
+                        data = (
+                            await camera.take_picture()
+                        )
+
+                        if not data:
+
+                            self.show_message(
+                                "Foto konnte nicht aufgenommen werden."
+                            )
+
+                            return
+
+                        receipt_data["bytes"] = data
+
+                        receipt_data["extension"] = (
+                            ".jpg"
+                        )
+
+                        receipt_data["name"] = (
+                            "Aufgenommenes Foto"
+                        )
+
+                        self.app.page.pop_dialog()
+
+                        update_receipt_preview()
+
+                    except Exception as ex:
+
+                        print(
+                            "Camera capture error:",
+                            type(ex).__name__,
+                            ex
+                        )
+
+                        self.show_message(
+                            "Foto konnte nicht aufgenommen werden.\n\n"
+                            f"Fehler: {type(ex).__name__}: {ex}"
+                        )
+
+                def close_camera_dialog(e=None):
+
+                    try:
+                        self.app.page.pop_dialog()
+                    except Exception:
+                        pass
+
+                # -------------------------------------------------
+                # KAMERA-DIALOG
+                # -------------------------------------------------
+
+                camera_dialog = ft.AlertDialog(
+                    modal=True,
+                    title=ft.Text(
+                        "Beleg fotografieren"
+                    ),
+                    content=ft.Container(
+                        width=320,
+                        height=420,
+                        content=camera
+                    ),
+                    actions=[
+                        ft.TextButton(
+                            "Abbrechen",
+                            on_click=close_camera_dialog
+                        ),
+                        ft.FilledButton(
+                            "Foto aufnehmen",
+                            icon=ft.Icons.PHOTO_CAMERA,
+                            on_click=capture_photo
+                        )
+                    ]
+                )
+
+                # -------------------------------------------------
+                # WICHTIG:
+                #
+                # Erst Dialog + Camera an die Page hängen.
+                # -------------------------------------------------
+
+                self.app.page.show_dialog(
+                    camera_dialog
+                )
+
+                self.app.page.update()
+
+                # -------------------------------------------------
+                # JETZT darf die Camera verwendet werden.
+                # -------------------------------------------------
+
                 cameras = (
                     await camera.get_available_cameras()
                 )
 
                 if not cameras:
 
+                    self.app.page.pop_dialog()
+
                     self.show_message(
-                        "Keine Kamera gefunden."
+                        "Es wurde keine Kamera gefunden.\n\n"
+                        "Bitte überprüfe, ob dein Android-Gerät "
+                        "über eine funktionierende Kamera verfügt."
                     )
 
                     return
 
-                # Bevorzugt die Rückkamera.
+                # -------------------------------------------------
+                # Rückkamera bevorzugen
+                # -------------------------------------------------
+
                 selected_camera = next(
                     (
                         item
@@ -635,82 +1012,27 @@ class OverviewScreen(ft.Column):
                     )
                 )
 
-                async def capture_photo(e=None):
-
-                    try:
-
-                        data = (
-                            await camera.take_picture()
-                        )
-
-                        if not data:
-
-                            self.show_message(
-                                "Foto konnte nicht aufgenommen werden."
-                            )
-
-                            return
-
-                        receipt_data["bytes"] = data
-                        receipt_data["extension"] = ".jpg"
-                        receipt_data["name"] = (
-                            "Aufgenommenes Foto"
-                        )
-
-                        self.app.page.pop_dialog()
-
-                        update_receipt_preview()
-
-                    except Exception as ex:
-
-                        self.show_message(
-                            "Foto konnte nicht aufgenommen werden."
-                        )
-
-                        print(
-                            "Camera capture error:",
-                            ex
-                        )
-
-                camera_dialog = ft.AlertDialog(
-                    modal=True,
-                    title=ft.Text(
-                        "Beleg fotografieren"
-                    ),
-                    content=ft.Container(
-                        width=320,
-                        height=420,
-                        content=camera
-                    ),
-                    actions=[
-                        ft.TextButton(
-                            "Abbrechen",
-                            on_click=lambda e:
-                            self.app.page.pop_dialog()
-                        ),
-                        ft.FilledButton(
-                            "Foto aufnehmen",
-                            icon=ft.Icons.PHOTO_CAMERA,
-                            on_click=capture_photo
-                        )
-                    ]
-                )
-
-                self.app.page.show_dialog(
-                    camera_dialog
-                )
-
                 self.app.page.update()
 
             except Exception as ex:
 
                 print(
                     "Camera error:",
+                    type(ex).__name__,
                     ex
                 )
 
+                # Wenn der Kamera-Dialog bereits geöffnet wurde,
+                # schließen wir ihn vor der Fehlermeldung.
+                try:
+                    if camera_dialog is not None:
+                        self.app.page.pop_dialog()
+                except Exception:
+                    pass
+
                 self.show_message(
-                    "Kamera konnte nicht gestartet werden."
+                    "Die Kamera konnte nicht gestartet werden.\n\n"
+                    f"Fehler: {type(ex).__name__}: {ex}"
                 )
 
         # -----------------------------------------------------
@@ -933,6 +1255,7 @@ class OverviewScreen(ft.Column):
 
                     print(
                         "Receipt save error:",
+                        type(ex).__name__,
                         ex
                     )
 
