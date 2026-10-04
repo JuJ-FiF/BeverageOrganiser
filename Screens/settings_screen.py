@@ -531,12 +531,6 @@ class SettingsScreen(ft.Column):
             download_url
     ):
 
-        log("================================")
-        log("Update-Installation gestartet")
-        log(
-            f"Download-URL: {download_url}"
-        )
-
         try:
 
             # ---------------------------------------------
@@ -551,17 +545,10 @@ class SettingsScreen(ft.Column):
 
             self.show_update_status()
 
-            log(
-                "Update-Balken angezeigt."
-            )
 
             # ---------------------------------------------
             # APK herunterladen und Installer starten
             # ---------------------------------------------
-
-            log(
-                "Lade neue APK herunter..."
-            )
 
             apk_path = (
                 await download_and_install_update(
@@ -569,15 +556,6 @@ class SettingsScreen(ft.Column):
                 )
             )
 
-            log(
-                f"APK heruntergeladen: "
-                f"{apk_path}"
-            )
-
-            log(
-                "Android-Installer wurde "
-                "gestartet."
-            )
 
             # ---------------------------------------------
             # Status aktualisieren
@@ -609,15 +587,6 @@ class SettingsScreen(ft.Column):
 
         except Exception as ex:
 
-            log_error(
-                "Update-Fehler: "
-                f"{type(ex).__name__}"
-            )
-
-            log_error(
-                f"Fehlermeldung: {ex}"
-            )
-
             self.hide_update_status()
 
             self.show_dialog(
@@ -627,11 +596,6 @@ class SettingsScreen(ft.Column):
                 f"Fehler:\n{ex}"
             )
 
-        log(
-            "Update-Installation beendet"
-        )
-
-        log("================================")
 
     # =========================================================
     # ALLGEMEINER DIALOG

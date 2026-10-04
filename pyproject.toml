@@ -1,6 +1,6 @@
 [project]
 name = "beverageorganiser"
-version = "1.2.1"
+version = "1.2.1-HotFix#1"
 description = "Getränkekasse"
 requires-python = ">=3.11,<3.13"
 dependencies = [
