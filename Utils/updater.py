@@ -373,6 +373,34 @@ def download_apk(
 # ANDROID UPDATE STARTEN
 # =========================================================
 
+def request_install_permission():
+    """Return True if APK installs are allowed; otherwise open Android settings."""
+    from jnius import autoclass, cast
+
+    PythonActivity = autoclass(
+        "com.flet.serious_python_android.PythonActivity"
+    )
+    activity = cast(
+        "android.app.Activity",
+        PythonActivity.mActivity,
+    )
+    if activity is None:
+        raise RuntimeError("Die Android Activity ist nicht verfügbar.")
+
+    if activity.getPackageManager().canRequestPackageInstalls():
+        return True
+
+    Intent = autoclass("android.content.Intent")
+    Uri = autoclass("android.net.Uri")
+    Settings = autoclass("android.provider.Settings")
+    settings_intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES)
+    settings_intent.setData(
+        Uri.parse("package:" + activity.getPackageName())
+    )
+    activity.startActivity(settings_intent)
+    return False
+
+
 def start_android_update(
     apk_path
 ):
@@ -435,10 +463,6 @@ def start_android_update(
         "android.net.Uri"
     )
 
-    Settings = autoclass(
-        "android.provider.Settings"
-    )
-
     File = autoclass(
         "java.io.File"
     )
@@ -448,38 +472,14 @@ def start_android_update(
     )
 
     # -----------------------------------------------------
-    # Installation aus unbekannten Quellen prüfen
+    # Installationsberechtigung erneut prüfen, falls sie sich geändert hat.
     # -----------------------------------------------------
 
-    package_manager = (
-        activity.getPackageManager()
-    )
-
-    if not package_manager.canRequestPackageInstalls():
-
-        settings_intent = Intent(
-            Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES
-        )
-
-        settings_uri = Uri.parse(
-            "package:"
-            + activity.getPackageName()
-        )
-
-        settings_intent.setData(
-            settings_uri
-        )
-
-        activity.startActivity(
-            settings_intent
-        )
-
+    if not request_install_permission():
         raise RuntimeError(
-            "Android blockiert momentan die "
-            "Installation unbekannter Apps.\n\n"
-            "Bitte erlaube in den Android-Einstellungen "
-            "die Installation aus dieser Quelle und "
-            "starte das Update anschließend erneut."
+            "Die Installation unbekannter Apps ist für diese Quelle "
+            "noch nicht erlaubt. Bitte erteile die Berechtigung und "
+            "starte das Update erneut."
         )
 
     # -----------------------------------------------------
@@ -545,6 +545,9 @@ def start_android_update(
 async def download_and_install_update(
     download_url
 ):
+    can_install = await asyncio.to_thread(request_install_permission)
+    if not can_install:
+        return None
 
     apk_path = await asyncio.to_thread(
         download_apk,

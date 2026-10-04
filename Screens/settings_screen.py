@@ -41,7 +41,7 @@ class SettingsScreen(ft.Column):
                         color=ft.Colors.WHITE
                     ),
                     ft.Text(
-                        "Update wird installiert …",
+                        "Update wird vorbereitet …",
                         color=ft.Colors.WHITE,
                         weight=ft.FontWeight.BOLD
                     )
@@ -484,7 +484,7 @@ class SettingsScreen(ft.Column):
                     color=ft.Colors.WHITE
                 ),
                 ft.Text(
-                    "Update wird installiert …",
+                    "Update wird vorbereitet …",
                     color=ft.Colors.WHITE,
                     weight=ft.FontWeight.BOLD
                 )
@@ -527,6 +527,17 @@ class SettingsScreen(ft.Column):
                     download_url
                 )
             )
+
+            if apk_path is None:
+                self.hide_update_status()
+                self.show_dialog(
+                    "Installation erlauben",
+                    "Android hat die Einstellung für diese Quelle geöffnet. "
+                    "Erlaube dort die Installation unbekannter Apps und "
+                    "starte das Update anschließend erneut. Die APK wurde "
+                    "noch nicht heruntergeladen.",
+                )
+                return
 
             # ---------------------------------------------
             # Status aktualisieren
