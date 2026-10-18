@@ -3,12 +3,15 @@
 import json
 import os
 import tempfile
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 from Utils.classes import Beverage, Expense, Person
 
 DATA_FILE_NAME = "data.json"
 BACKUP_FILE_SUFFIX = ".bak"
+SETTINGS_FILE_NAME = "settings.json"
+DEFAULT_DEPOSIT_AMOUNTS = (5.0, 10.0, 20.0)
 
 
 def get_data_file_path(app_file):
@@ -25,6 +28,82 @@ def get_data_file_path(app_file):
 def get_backup_file_path(file_path):
     """Return the single previous-version file for a data path."""
     return Path(f"{file_path}{BACKUP_FILE_SUFFIX}")
+
+
+def parse_euro_amount(value):
+    """Parse a positive euro amount with at most two decimal places."""
+    try:
+        amount = Decimal(str(value).strip().replace(",", "."))
+        if (
+            not amount.is_finite()
+            or amount <= 0
+            or amount != amount.quantize(Decimal("0.01"))
+        ):
+            raise ValueError
+    except (InvalidOperation, ValueError):
+        raise ValueError(
+            "Gib einen positiven Betrag mit höchstens zwei Nachkommastellen ein."
+        ) from None
+    return float(amount)
+
+
+def format_euro_amount(value):
+    formatted = f"{float(value):.2f}"
+    if formatted.endswith(".00"):
+        formatted = formatted[:-3]
+    return formatted.replace(".", ",")
+
+
+def validate_deposit_amounts(values):
+    """Validate and normalize the three quick-deposit amounts."""
+    if not isinstance(values, (list, tuple)) or len(values) != 3:
+        raise ValueError("Es müssen genau drei Einzahlungsbeträge angegeben werden.")
+
+    amounts = [parse_euro_amount(value) for value in values]
+    if len(set(amounts)) != 3:
+        raise ValueError("Die drei Einzahlungsbeträge müssen unterschiedlich sein.")
+    return amounts
+
+
+def get_settings_file_path(data_file_path):
+    return Path(data_file_path).parent / SETTINGS_FILE_NAME
+
+
+def load_deposit_amounts(data_file_path):
+    """Load quick-deposit amounts, recovering from their backup if needed."""
+    settings_path = get_settings_file_path(data_file_path)
+    backup_path = get_backup_file_path(settings_path)
+
+    for candidate in (settings_path, backup_path):
+        if not candidate.exists():
+            continue
+        try:
+            data = json.loads(candidate.read_text(encoding="utf-8"))
+            amounts = validate_deposit_amounts(data.get("deposit_amounts"))
+        except (OSError, ValueError, TypeError, AttributeError):
+            continue
+
+        if candidate == backup_path:
+            _write_atomically(settings_path, candidate.read_bytes())
+            print("Einstellungen fehlerhaft; Sicherung wurde wiederhergestellt.")
+        return amounts
+
+    return list(DEFAULT_DEPOSIT_AMOUNTS)
+
+
+def save_deposit_amounts(data_file_path, values):
+    """Save quick-deposit amounts atomically and retain the previous version."""
+    amounts = validate_deposit_amounts(values)
+    settings_path = get_settings_file_path(data_file_path)
+    backup_path = get_backup_file_path(settings_path)
+    content = json.dumps(
+        {"deposit_amounts": amounts}, ensure_ascii=False, indent=4
+    ).encode("utf-8")
+
+    if settings_path.exists():
+        _write_atomically(backup_path, settings_path.read_bytes())
+    _write_atomically(settings_path, content)
+    return amounts
 
 
 def has_saved_data_file(file_path):

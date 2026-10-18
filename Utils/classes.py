@@ -1,8 +1,9 @@
 from datetime import datetime
 
 class Transaction:
-    def __init__(self, amount, date=None):
+    def __init__(self, amount, date=None, note=""):
         self.amount = float(amount)
+        self.note = str(note or "")
         self.date = (
             date
             if date
@@ -12,14 +13,16 @@ class Transaction:
     def to_dict(self):
         return {
             "amount": self.amount,
-            "date": self.date
+            "date": self.date,
+            "note": self.note,
         }
 
     @classmethod
     def from_dict(cls, data):
         return cls(
             amount=data["amount"],
-            date=data["date"]
+            date=data["date"],
+            note=data.get("note", ""),
         )
 
 class Person:
@@ -40,9 +43,9 @@ class Person:
             for transaction in self.transactions
         )
 
-    def add_transaction(self, amount):
+    def add_transaction(self, amount, note=""):
         self.transactions.append(
-            Transaction(amount=amount)
+            Transaction(amount=amount, note=note)
         )
 
     def remove_transaction(self, transaction):

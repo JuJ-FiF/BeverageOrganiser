@@ -4,6 +4,7 @@ import flet as ft
 
 from Utils.classes import Person
 from Utils.animations import BUTTON_EXPAND_ON_SELECT, booking_animation
+from Utils.data_store import format_euro_amount, parse_euro_amount
 
 class PersonScreen(ft.Column):
 
@@ -14,28 +15,12 @@ class PersonScreen(ft.Column):
         )
 
         self.app = app
-        self.selected_amount = 20.0
-
-        self.btn_5 = ft.Button(
-            "5 €",
-            expand=True,
-            on_click=lambda e: self.select_amount(5),
-            animate_scale=BUTTON_EXPAND_ON_SELECT
-        )
-
-        self.btn_10 = ft.Button(
-            "10 €",
-            expand=True,
-            on_click=lambda e: self.select_amount(10),
-            animate_scale=BUTTON_EXPAND_ON_SELECT
-        )
-
-        self.btn_20 = ft.Button(
-            "20 €",
-            expand=True,
-            on_click=lambda e: self.select_amount(20),
-            animate_scale=BUTTON_EXPAND_ON_SELECT
-        )
+        self.selected_amount = self.app.deposit_amounts[-1]
+        self.custom_amount_selected = False
+        self.selected_note = ""
+        self.amount_buttons = []
+        self.amount_row = ft.Column(spacing=4)
+        self.build_amount_controls()
 
         self.person_list = ft.ListView(
             expand=True,
@@ -51,14 +36,7 @@ class PersonScreen(ft.Column):
                 padding=ft.Padding.only(left=26,
                                         right=36,
                                         top=8),
-                content=ft.Row(
-                    controls=[
-                        self.btn_5,
-                        self.btn_10,
-                        self.btn_20
-                    ],
-                    spacing=16
-                )
+                content=self.amount_row,
             ),
 
             ft.Container(
@@ -88,10 +66,90 @@ class PersonScreen(ft.Column):
     # BETRAG AUSWÄHLEN
     # ---------------------------------------------------------
 
+    @staticmethod
+    def format_amount(amount):
+        return format_euro_amount(amount)
+
+    def build_amount_controls(self):
+        self.amount_buttons = [
+            ft.Button(
+                f"{self.format_amount(amount)} €",
+                expand=True,
+                on_click=lambda e, value=amount: self.select_amount(value),
+                animate_scale=BUTTON_EXPAND_ON_SELECT,
+            )
+            for amount in self.app.deposit_amounts
+        ]
+        self.custom_amount_button = ft.Button(
+            self.custom_amount_label(),
+            icon=ft.Icons.EDIT_OUTLINED,
+            on_click=self.open_custom_amount_dialog,
+        )
+        self.amount_row.controls = [
+            ft.Row(controls=self.amount_buttons, spacing=16),
+            ft.Row(
+                [self.custom_amount_button],
+                alignment=ft.MainAxisAlignment.END,
+            ),
+        ]
+        self.update_button_styles()
+
+    def custom_amount_label(self):
+        if not self.custom_amount_selected:
+            return "Eigener Betrag"
+        return f"Eigener Betrag · {self.format_amount(self.selected_amount)} €"
+
     def select_amount(self, amount):
         self.selected_amount = float(amount)
+        self.custom_amount_selected = False
+        self.selected_note = ""
         self.update_button_styles()
         self.app.page.update()
+
+    def open_custom_amount_dialog(self, e=None):
+        amount_field = ft.TextField(
+            label="Betrag (€)",
+            hint_text="z. B. 7,50",
+            keyboard_type=ft.KeyboardType.TEXT,
+            autofocus=True,
+        )
+        note_field = ft.TextField(
+            label="Vermerk (optional)",
+            hint_text="z. B. Gast oder Pfandrückgeld",
+        )
+
+        def save_custom_amount(_):
+            try:
+                amount = parse_euro_amount(amount_field.value)
+            except ValueError as error:
+                amount_field.error_text = str(error)
+                self.app.page.update()
+                return
+
+            self.selected_amount = amount
+            self.selected_note = note_field.value.strip() or "Eigener Betrag"
+            self.custom_amount_selected = True
+            self.app.page.pop_dialog()
+            self.update_button_styles()
+            self.app.page.update()
+
+        dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("Eigenen Betrag festlegen"),
+            content=ft.Column(
+                [amount_field, note_field],
+                tight=True,
+                spacing=12,
+            ),
+            actions=[
+                ft.TextButton(
+                    "Abbrechen",
+                    on_click=lambda _: self.app.page.pop_dialog(),
+                ),
+                ft.FilledButton("Übernehmen", on_click=save_custom_amount),
+            ],
+        )
+        self.app.page.show_dialog(dialog)
 
     def update_button_styles(self):
         filled = ft.ButtonStyle(
@@ -108,26 +166,18 @@ class PersonScreen(ft.Column):
             )
         )
 
-        self.btn_5.style = (
-            filled
-            if self.selected_amount == 5
-            else outlined
-        )
-        self.btn_5.scale = 1.05 if self.selected_amount == 5 else 1
+        for button, amount in zip(self.amount_buttons, self.app.deposit_amounts):
+            selected = (
+                not self.custom_amount_selected
+                and self.selected_amount == amount
+            )
+            button.style = filled if selected else outlined
+            button.scale = 1.05 if selected else 1
 
-        self.btn_10.style = (
-            filled
-            if self.selected_amount == 10
-            else outlined
+        self.custom_amount_button.content = self.custom_amount_label()
+        self.custom_amount_button.style = (
+            filled if self.custom_amount_selected else outlined
         )
-        self.btn_10.scale = 1.05 if self.selected_amount == 10 else 1
-
-        self.btn_20.style = (
-            filled
-            if self.selected_amount == 20
-            else outlined
-        )
-        self.btn_20.scale = 1.05 if self.selected_amount == 20 else 1
 
     # ---------------------------------------------------------
     # PERSON ANTIPPEN
@@ -137,7 +187,7 @@ class PersonScreen(ft.Column):
 
         amount = self.selected_amount
 
-        person.add_transaction(amount)
+        person.add_transaction(amount, self.selected_note)
 
         self.app.save_data()
         self.update_list()
@@ -280,6 +330,10 @@ class PersonScreen(ft.Column):
                         else ""
                     )
 
+                    subtitle = f"Datum: {transaction.date}"
+                    if transaction.note:
+                        subtitle += f" · {transaction.note}"
+
                     tile = ft.Container(
                         bgcolor="#D7C9A8",
                         border_radius=10,
@@ -294,7 +348,7 @@ class PersonScreen(ft.Column):
                                 color=ft.Colors.BLACK
                             ),
                             subtitle=ft.Text(
-                                f"Datum: {transaction.date}",
+                                subtitle,
                                 color=ft.Colors.BLACK_87
                             ),
                             bgcolor="#D7C9A8"
@@ -360,5 +414,10 @@ class PersonScreen(ft.Column):
     # ---------------------------------------------------------
 
     def refresh(self):
-        self.update_button_styles()
+        if (
+            not self.custom_amount_selected
+            and self.selected_amount not in self.app.deposit_amounts
+        ):
+            self.selected_amount = self.app.deposit_amounts[-1]
+        self.build_amount_controls()
         self.update_list()

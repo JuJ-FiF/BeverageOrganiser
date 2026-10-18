@@ -7,6 +7,7 @@ from Screens.settings_screen import SettingsScreen
 from Utils.data_store import (
     get_data_file_path,
     has_saved_data_file,
+    load_deposit_amounts,
     load_data,
     save_data,
 )
@@ -28,6 +29,7 @@ class DrinkCashApp:
 
         # Speicherpfad
         self.data_file_path = get_data_file_path(__file__)
+        self.deposit_amounts = load_deposit_amounts(self.data_file_path)
 
         self.load_data()
         self.setup_page()

@@ -10,6 +10,11 @@ from Utils.data_transfer import (
 from Screens.dialogs import show_confirmation_dialog, show_message_dialog
 from Utils.updater import check_for_update, download_and_install_update
 from Utils.version import APP_VERSION
+from Utils.data_store import (
+    format_euro_amount,
+    save_deposit_amounts as persist_deposit_amounts,
+    validate_deposit_amounts,
+)
 
 class SettingsScreen(ft.Column):
 
@@ -124,6 +129,22 @@ class SettingsScreen(ft.Column):
             )
         )
 
+        self.settings_list.controls.append(ft.Divider())
+        self.deposit_amount_summary = ft.Text(
+            self.format_deposit_summary(self.app.deposit_amounts)
+        )
+        self.settings_list.controls.append(
+            ft.ListTile(
+                leading=ft.Icon(ft.Icons.EURO),
+                title=ft.Text(
+                    "Einzahlungsbeträge",
+                    weight=ft.FontWeight.BOLD,
+                ),
+                subtitle=self.deposit_amount_summary,
+                on_click=self.open_deposit_amount_dialog,
+            )
+        )
+
         self.controls = [
             self.update_status,
 
@@ -165,6 +186,88 @@ class SettingsScreen(ft.Column):
             self.app.person_objects,
             self.app.expense_objects,
             self.app.beverage_objects,
+        )
+
+    @staticmethod
+    def format_deposit_summary(amounts):
+        values = " · ".join(f"{format_euro_amount(amount)} €" for amount in amounts)
+        return f"Schnellbeträge ändern - (aktuell: {values})"
+
+    def open_deposit_amount_dialog(self, e=None):
+        fields = [
+            ft.TextField(
+                label=f"Schnellbetrag {index + 1} (€)",
+                value=format_euro_amount(amount),
+                expand=True,
+                keyboard_type=ft.KeyboardType.TEXT,
+            )
+            for index, amount in enumerate(self.app.deposit_amounts)
+        ]
+        error_text = ft.Text(
+            color=ft.Colors.ERROR,
+            size=13,
+            visible=False,
+        )
+
+        dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("Schnellbeträge anpassen"),
+            content=ft.Container(
+                width=420,
+                content=ft.Column(
+                    [
+                        ft.Text(
+                            "Lege die drei Beträge für schnelle Einzahlungen fest. "
+                            "Sie müssen positiv und unterschiedlich sein.",
+                            color=ft.Colors.ON_SURFACE_VARIANT,
+                        ),
+                        ft.Column(fields, spacing=8),
+                        error_text,
+                    ],
+                    tight=True,
+                    spacing=14,
+                ),
+            ),
+            actions=[
+                ft.TextButton(
+                    "Abbrechen",
+                    on_click=lambda _: self.app.page.pop_dialog(),
+                ),
+                ft.FilledButton(
+                    "Speichern",
+                    icon=ft.Icons.SAVE_OUTLINED,
+                    on_click=lambda _: self.save_deposit_amounts(fields, error_text),
+                ),
+            ],
+        )
+        self.app.page.show_dialog(dialog)
+
+    def save_deposit_amounts(self, fields, error_text):
+        try:
+            amounts = validate_deposit_amounts([field.value for field in fields])
+            self.app.deposit_amounts = persist_deposit_amounts(
+                self.app.data_file_path,
+                amounts,
+            )
+        except ValueError as ex:
+            error_text.value = str(ex)
+            error_text.visible = True
+            self.app.page.update()
+            return
+        except OSError as ex:
+            error_text.value = f"Speichern fehlgeschlagen: {ex}"
+            error_text.visible = True
+            self.app.page.update()
+            return
+
+        self.deposit_amount_summary.value = self.format_deposit_summary(
+            self.app.deposit_amounts
+        )
+        self.app.page.pop_dialog()
+        self.app.refresh_all_screens()
+        self.show_dialog(
+            "Einzahlungsbeträge gespeichert",
+            "Die neuen Schnellbeträge werden ab sofort verwendet.",
         )
 
     # =========================================================
