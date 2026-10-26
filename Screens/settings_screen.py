@@ -15,14 +15,16 @@ from Utils.data_store import (
     save_deposit_amounts as persist_deposit_amounts,
     validate_deposit_amounts,
 )
-from Screens.ui_components import ACCENT_COLOR, ACCENT_TEXT_COLOR
+from Screens.ui_components import screen_heading
 
 class SettingsScreen(ft.Column):
 
     def __init__(self, app):
         super().__init__(
             expand=True,
-            spacing=0
+            horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+            spacing=20,
+            scroll=ft.ScrollMode.AUTO,
         )
 
         self.app = app
@@ -63,53 +65,28 @@ class SettingsScreen(ft.Column):
         self.file_picker = ft.FilePicker()
         if self.file_picker not in self.app.page.services:
             self.app.page.services.append(self.file_picker)
-        self.settings_list = ft.ListView(
-            expand=True,
-            spacing=18,
-            padding=ft.Padding.only(left=16, top=16, right=16, bottom=24),
-        )
         self.deposit_amount_summary = ft.Text(
-            self.format_deposit_summary(self.app.deposit_amounts),
-            size=14,
-            color=ft.Colors.ON_SURFACE_VARIANT,
+            self.format_deposit_summary(self.app.deposit_amounts)
         )
-        self.settings_list.controls = [
+        settings_cards = [
             self.settings_card(
-                title="Einzahlungen",
-                icon=ft.Icons.EURO,
+                title="Einzahlungsbeträge",
                 description=self.deposit_amount_summary,
                 actions=[
                     self.action_button(
-                        "Schnellbeträge anpassen",
+                        "Beträge anpassen",
                         ft.Icons.EDIT_OUTLINED,
                         self.open_deposit_amount_dialog,
                     )
                 ],
+                action_alignment=ft.MainAxisAlignment.END,
             ),
             self.settings_card(
-                title="App-Updates",
-                icon=ft.Icons.SYSTEM_UPDATE,
-                description=(
-                    "Prüfe, ob eine neue Version der App verfügbar ist."
-                ),
-                details=ft.Text(
-                    f"Installierte Version: {APP_VERSION}",
-                    size=14,
-                ),
-                actions=[
-                    self.action_button(
-                        "Nach Updates suchen",
-                        ft.Icons.SYSTEM_UPDATE,
-                        self.check_updates,
-                    )
-                ],
-            ),
-            self.settings_card(
-                title="Daten sichern",
+                title="Datenverwaltung",
                 icon=ft.Icons.SWAP_HORIZ,
                 description=(
-                    "Personen, Buchungen, Ausgaben und Getränke als JSON-Datei "
-                    "sichern oder wiederherstellen."
+                    "Personen, Buchungen, Ausgaben und Getränke als JSON sichern "
+                    "oder aus einem Export wiederherstellen."
                 ),
                 actions=[
                     self.action_button(
@@ -124,12 +101,13 @@ class SettingsScreen(ft.Column):
                         primary=True,
                     ),
                 ],
+                action_alignment=ft.MainAxisAlignment.END,
             ),
             self.settings_card(
                 title="Einstellungen sichern",
                 icon=ft.Icons.SETTINGS_BACKUP_RESTORE,
                 description=(
-                    "Schnellbeträge als JSON-Datei sichern oder von dort "
+                    "Schnellbeträge als JSON-Datei sichern oder aus einem Export "
                     "wiederherstellen."
                 ),
                 actions=[
@@ -145,6 +123,23 @@ class SettingsScreen(ft.Column):
                         primary=True,
                     ),
                 ],
+                action_alignment=ft.MainAxisAlignment.END,
+            ),
+            self.settings_card(
+                title="App-Updates",
+                icon=ft.Icons.SYSTEM_UPDATE,
+                description=(
+                    "Updates werden geprüft und als Android-App installiert."
+                ),
+                details=ft.Text(f"Installierte Version: {APP_VERSION}"),
+                actions=[
+                    self.action_button(
+                        "Nach Updates suchen",
+                        ft.Icons.SYSTEM_UPDATE,
+                        self.check_updates,
+                    )
+                ],
+                action_alignment=ft.MainAxisAlignment.END,
             ),
             self.settings_card(
                 title="Kassenverwaltung",
@@ -161,17 +156,17 @@ class SettingsScreen(ft.Column):
                         color=ft.Colors.ERROR,
                     )
                 ],
+                action_alignment=ft.MainAxisAlignment.END,
             ),
         ]
 
         self.controls = [
+            screen_heading(
+                "Einstellungen",
+                "Einzahlungen, Daten und App verwalten.",
+            ),
             self.update_status,
-
-            ft.Container(
-                padding=16,
-                content=self.settings_list,
-                expand=True
-            )
+            *settings_cards,
         ]
 
 
@@ -179,16 +174,25 @@ class SettingsScreen(ft.Column):
     # DATEN FÜR EXPORT ERSTELLEN
     # =========================================================
 
-    def settings_card(self, title, icon, description, actions, details=None):
-        content = [
-            ft.Row(
+    def settings_card(
+        self,
+        title,
+        description,
+        actions,
+        icon=None,
+        details=None,
+        action_alignment=ft.MainAxisAlignment.END,
+    ):
+        heading = ft.Text(title, size=18, weight=ft.FontWeight.W_600)
+        if icon is not None:
+            heading = ft.Row(
                 [
-                    ft.Icon(icon, color=ACCENT_COLOR, size=24),
-                    ft.Text(title, size=18, weight=ft.FontWeight.BOLD),
+                    ft.Icon(icon, color=ft.Colors.PRIMARY),
+                    heading,
                 ],
-                spacing=12,
-            ),
-        ]
+                spacing=10,
+            )
+        content = [heading]
         if details is not None:
             content.append(details)
         content.extend(
@@ -200,43 +204,45 @@ class SettingsScreen(ft.Column):
                     size=14,
                     color=ft.Colors.ON_SURFACE_VARIANT,
                 ),
-                ft.Column(actions, spacing=8, tight=True),
+                ft.Row(
+                    actions,
+                    spacing=10,
+                    wrap=True,
+                    alignment=action_alignment,
+                ),
             ]
         )
         return ft.Card(
             variant=ft.CardVariant.OUTLINED,
             elevation=0,
-            shape=ft.RoundedRectangleBorder(radius=16),
             content=ft.Container(
                 padding=20,
-                content=ft.Column(content, spacing=12, tight=True),
+                content=ft.Column(content, spacing=12),
             ),
         )
 
     @staticmethod
     def action_button(label, icon, on_click, primary=False, color=None):
-        foreground = color or ACCENT_COLOR
-        shape = ft.RoundedRectangleBorder(radius=22)
         if primary:
             return ft.FilledButton(
                 label,
                 icon=icon,
                 on_click=on_click,
+            )
+        if color:
+            return ft.OutlinedButton(
+                label,
+                icon=icon,
+                on_click=on_click,
                 style=ft.ButtonStyle(
-                    bgcolor=ACCENT_COLOR if color is None else color,
-                    color=ACCENT_TEXT_COLOR if color is None else ft.Colors.WHITE,
-                    shape=shape,
+                    color=color,
+                    side=ft.BorderSide(1, color),
                 ),
             )
         return ft.OutlinedButton(
             label,
             icon=icon,
             on_click=on_click,
-            style=ft.ButtonStyle(
-                color=foreground,
-                side=ft.BorderSide(1, foreground),
-                shape=shape,
-            ),
         )
 
     def create_export_data(self):
@@ -848,3 +854,5 @@ class SettingsScreen(ft.Column):
 
     def refresh(self):
         self.update()
+
+
