@@ -264,7 +264,7 @@ class ExpenseWorkflowMixin:
         receipt_status = ft.Text(
             "Kein Beleg ausgewählt.",
             size=12,
-            color=ft.Colors.GREY_600
+            color=ft.Colors.ON_SURFACE_VARIANT,
         )
 
         remove_receipt_button = ft.TextButton(

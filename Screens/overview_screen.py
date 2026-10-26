@@ -8,6 +8,7 @@ from Utils.receipts import delete_receipt, read_receipt, receipt_exists
 
 from Screens.dialogs import show_confirmation_dialog
 from Screens.expense_workflow import ExpenseWorkflowMixin
+from Screens.ui_components import primary_button, screen_heading, surface_card
 
 
 class OverviewScreen(ExpenseWorkflowMixin, ft.Column):
@@ -38,13 +39,13 @@ class OverviewScreen(ExpenseWorkflowMixin, ft.Column):
         self.total_income_label = ft.Text(
             "Eingesammelt: 0.00 €",
             color=ft.Colors.GREEN_400,
-            size=16
+            size=16,
         )
 
         self.total_expense_label = ft.Text(
             "Ausgegeben: 0.00 €",
             color=ft.Colors.RED_400,
-            size=16
+            size=16,
         )
 
         self.balance_label = ft.Text(
@@ -53,58 +54,36 @@ class OverviewScreen(ExpenseWorkflowMixin, ft.Column):
             weight=ft.FontWeight.BOLD
         )
 
-        self.expense_list = ft.ListView(
-            expand=True,
-            spacing=4
-        )
+        self.expense_list = ft.ListView(expand=True, spacing=8)
 
         self.controls = [
-            ft.Container(
-                padding=12,
-                content=ft.Card(
-                    content=ft.Container(
-                        padding=16,
-                        content=ft.Column(
-                            spacing=8,
-                            controls=[
-                                self.total_income_label,
-                                self.total_expense_label,
-                                ft.Divider(),
-                                self.balance_label
-                            ]
-                        )
-                    )
-                )
-            ),
-
-            ft.Container(
-                padding=ft.Padding.symmetric(
-                    horizontal=16
+            screen_heading(
+                "Kassenübersicht",
+                "Einnahmen, Ausgaben und aktueller Kassenbestand.",
+                primary_button(
+                    "Ausgabe buchen",
+                    ft.Icons.RECEIPT_LONG,
+                    self.open_add_expense_dialog,
                 ),
-                content=ft.FilledButton(
-                    "Ausgabe / Getränkeeinkauf buchen",
-                    icon=ft.Icons.RECEIPT_LONG,
-                    on_click=self.open_add_expense_dialog
-                )
             ),
-
-            ft.Container(
-                padding=ft.Padding.symmetric(
-                    horizontal=16
+            surface_card(
+                ft.Column(
+                    [
+                        self.total_income_label,
+                        self.total_expense_label,
+                        ft.Divider(),
+                        self.balance_label,
+                    ],
+                    spacing=10,
+                    tight=True,
                 ),
-                content=ft.Text(
-                    "Ausgabenhistorie:",
-                    weight=ft.FontWeight.BOLD
-                )
+                padding=18,
             ),
-
+            ft.Text("Ausgabenhistorie", size=20, weight=ft.FontWeight.BOLD),
             ft.Container(
                 expand=True,
-                padding=ft.Padding.symmetric(
-                    horizontal=16
-                ),
                 content=self.expense_list
-            )
+            ),
         ]
 
         self.update_overview()
@@ -158,7 +137,6 @@ class OverviewScreen(ExpenseWorkflowMixin, ft.Column):
                             ",\n"
                         ),
                         weight=ft.FontWeight.BOLD,
-                        color=ft.Colors.BLACK,
                         style=ft.TextStyle(
                             height=1.1
                         ),
@@ -167,28 +145,16 @@ class OverviewScreen(ExpenseWorkflowMixin, ft.Column):
                 ]
             )
 
-            if has_receipt:
-
-                title_content.controls.append(
-                    ft.Icon(
-                        ft.Icons.RECEIPT_LONG,
-                        color=ft.Colors.BLACK,
-                        size=22
-                    )
-                )
-
-            tile = ft.Container(
-                bgcolor="#D7C9A8",
-                border_radius=10,
-                padding=ft.Padding.only(
-                    left=16,
-                    bottom=4
-                ),
-                content=ft.ListTile(
+            tile = surface_card(
+                ft.ListTile(
+                    leading=ft.Icon(
+                        ft.Icons.POINT_OF_SALE,
+                        color=ft.Colors.PRIMARY,
+                    ),
                     title=title_content,
                     subtitle=ft.Text(
                         f"Datum: {expense.date}",
-                        color=ft.Colors.BLACK_87
+                        color=ft.Colors.ON_SURFACE_VARIANT,
                     ),
                     trailing=ft.Text(
                         f"-{expense.amount:.2f} €",
@@ -197,16 +163,15 @@ class OverviewScreen(ExpenseWorkflowMixin, ft.Column):
                         color=ft.Colors.RED_400,
                         text_align=ft.TextAlign.RIGHT
                     ),
-                    content_padding=ft.Padding.only(
-                        right=16
-                    ),
+                    content_padding=ft.Padding.symmetric(horizontal=8),
                     on_click=(
                         lambda e, exp=expense:
                         self.show_expense_details(exp)
                     )
                     if has_receipt
                     else None
-                )
+                ),
+                padding=4,
             )
 
             gesture = ft.GestureDetector(

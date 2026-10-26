@@ -5,6 +5,13 @@ import flet as ft
 from Utils.classes import Person
 from Utils.animations import BUTTON_EXPAND_ON_SELECT, booking_animation
 from Utils.data_store import format_euro_amount, parse_euro_amount
+from Screens.ui_components import (
+    ACCENT_COLOR,
+    ACCENT_TEXT_COLOR,
+    primary_button,
+    screen_heading,
+    surface_card,
+)
 
 class PersonScreen(ft.Column):
 
@@ -24,7 +31,7 @@ class PersonScreen(ft.Column):
 
         self.person_list = ft.ListView(
             expand=True,
-            spacing=4,
+            spacing=8,
             padding=ft.Padding.only(
                 right=10
             ),
@@ -32,31 +39,30 @@ class PersonScreen(ft.Column):
         )
 
         self.controls = [
-            ft.Container(
-                padding=ft.Padding.only(left=26,
-                                        right=36,
-                                        top=8),
-                content=self.amount_row,
+            screen_heading(
+                "Personen",
+                "Guthaben verwalten und Einzahlungen buchen.",
+                primary_button(
+                    "Person hinzufügen",
+                    ft.Icons.PERSON_ADD,
+                    self.open_add_person_dialog,
+                ),
             ),
-
-            ft.Container(
-                expand=True,
-                padding=16,
-                content=ft.Stack(
-                    controls=[
-                        ft.Column(
-                            controls=[self.person_list,
-                                ft.Row()]
+            surface_card(
+                ft.Column(
+                    [
+                        ft.Text(
+                            "Einzahlungsbetrag",
+                            weight=ft.FontWeight.BOLD,
                         ),
-
-                        ft.FloatingActionButton(
-                            icon=ft.Icons.PERSON_ADD,
-                            on_click=self.open_add_person_dialog
-                        )
+                        self.amount_row,
                     ],
-                    alignment=ft.Alignment.BOTTOM_RIGHT
-                )
-            )
+                    spacing=10,
+                    tight=True,
+                ),
+                padding=16,
+            ),
+            ft.Container(expand=True, content=self.person_list),
         ]
 
         self.update_button_styles()
@@ -83,14 +89,12 @@ class PersonScreen(ft.Column):
         self.custom_amount_button = ft.Button(
             self.custom_amount_label(),
             icon=ft.Icons.EDIT_OUTLINED,
+            expand=True,
             on_click=self.open_custom_amount_dialog,
         )
         self.amount_row.controls = [
             ft.Row(controls=self.amount_buttons, spacing=16),
-            ft.Row(
-                [self.custom_amount_button],
-                alignment=ft.MainAxisAlignment.END,
-            ),
+            ft.Row([self.custom_amount_button]),
         ]
         self.update_button_styles()
 
@@ -153,17 +157,19 @@ class PersonScreen(ft.Column):
 
     def update_button_styles(self):
         filled = ft.ButtonStyle(
-            bgcolor=ft.Colors.AMBER,
-            color=ft.Colors.BLACK
+            bgcolor=ACCENT_COLOR,
+            color=ACCENT_TEXT_COLOR,
+            shape=ft.RoundedRectangleBorder(radius=24),
         )
 
         outlined = ft.ButtonStyle(
             bgcolor=ft.Colors.TRANSPARENT,
-            color=ft.Colors.AMBER,
+            color=ACCENT_COLOR,
             side=ft.BorderSide(
                 1,
-                ft.Colors.AMBER
-            )
+                ACCENT_COLOR,
+            ),
+            shape=ft.RoundedRectangleBorder(radius=24),
         )
 
         for button, amount in zip(self.amount_buttons, self.app.deposit_amounts):
@@ -204,30 +210,32 @@ class PersonScreen(ft.Column):
     def update_list(self):
         self.person_list.controls.clear()
 
-        for person in self.app.person_objects:
-            tile = ft.Container(
-                bgcolor="#D7C9A8",
-                border_radius=10,
-                padding=ft.Padding.symmetric(
-                    horizontal=16,
-                    vertical=10
+        ordered_persons = sorted(
+            self.app.person_objects,
+            key=lambda person: (
+                person.name.strip().casefold() == "sonstiges",
+                person.name.casefold(),
+            ),
+        )
+
+        for person in ordered_persons:
+            tile = surface_card(
+                ft.ListTile(
+                    leading=ft.Icon(
+                        ft.Icons.PERSON_OUTLINE,
+                        color=ft.Colors.PRIMARY,
+                    ),
+                    title=ft.Text(
+                        person.name,
+                        weight=ft.FontWeight.BOLD,
+                    ),
+                    subtitle=ft.Text(
+                        f"Budget: {person.budget:.2f} €",
+                        color=ft.Colors.ON_SURFACE_VARIANT,
+                    ),
+                    content_padding=ft.Padding.symmetric(horizontal=8),
                 ),
-                content=ft.Column(
-                    spacing=2,
-                    controls=[
-                        ft.Text(
-                            person.name,
-                            size=16,
-                            weight=ft.FontWeight.BOLD,
-                            color=ft.Colors.BLACK
-                        ),
-                        ft.Text(
-                            f"Budget: {person.budget:.2f} €",
-                            size=13,
-                            color=ft.Colors.BLACK_87
-                        )
-                    ]
-                )
+                padding=4,
             )
 
             gesture = ft.GestureDetector(
@@ -334,25 +342,18 @@ class PersonScreen(ft.Column):
                     if transaction.note:
                         subtitle += f" · {transaction.note}"
 
-                    tile = ft.Container(
-                        bgcolor="#D7C9A8",
-                        border_radius=10,
-                        padding=ft.Padding.only(
-                            left=4,
-                            bottom=4
-                        ),
+                    tile = surface_card(
                         content =ft.ListTile(
                             title=ft.Text(
                                 f"{prefix}{transaction.amount:.2f} €",
                                 weight=ft.FontWeight.BOLD,
-                                color=ft.Colors.BLACK
                             ),
                             subtitle=ft.Text(
                                 subtitle,
-                                color=ft.Colors.BLACK_87
+                                color=ft.Colors.ON_SURFACE_VARIANT,
                             ),
-                            bgcolor="#D7C9A8"
-                        )
+                        ),
+                        padding=4,
                     )
 
                     gesture = ft.GestureDetector(

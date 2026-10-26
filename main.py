@@ -36,30 +36,39 @@ class DrinkCashApp:
         self.create_screens()
         self.create_navigation_drawer()
 
-        # Hauptbereich der App
-        self.content_area = ft.Container(expand=True)
-
-        self.page.add(self.content_area)
-
     # ---------------------------------------------------------
     # FLET GRUNDEINSTELLUNGEN
     # ---------------------------------------------------------
 
     def setup_page(self):
-        self.page.title = "Getränkekasse"
+        self.page.title = "BeverageOrganiser"
         self.page.theme_mode = ft.ThemeMode.DARK
-
-        self.page.theme = ft.Theme(color_scheme_seed=ft.Colors.AMBER)
-        self.page.dark_theme = ft.Theme(color_scheme_seed=ft.Colors.AMBER)
-
+        theme = ft.Theme(
+            color_scheme_seed=ft.Colors.AMBER,
+            dialog_theme=ft.DialogTheme(
+                shape=ft.RoundedRectangleBorder(radius=20),
+            ),
+        )
+        self.page.theme = theme
+        self.page.dark_theme = theme
         self.page.padding = 0
+        self.wide_layout = (self.page.width or 0) >= 720
 
         self.page.appbar = ft.AppBar(
-            title=ft.Text("Getränkekasse"),
+            title=ft.Row(
+                [
+                    ft.Icon(ft.Icons.LOCAL_BAR, color=ft.Colors.PRIMARY),
+                    ft.Text("BeverageOrganiser", weight=ft.FontWeight.BOLD),
+                ],
+                spacing=10,
+            ),
             leading=ft.IconButton(
                 icon=ft.Icons.MENU,
-                on_click=self.open_drawer
+                tooltip="Navigation",
+                on_click=self.open_drawer,
             ),
+            bgcolor=ft.Colors.SURFACE,
+            elevation=0,
         )
 
     # ---------------------------------------------------------
@@ -82,47 +91,76 @@ class DrinkCashApp:
             on_change=self.on_drawer_change,
             controls=[
                 ft.Container(
-                    padding=ft.Padding.only(
-                        left=20,
-                        top=20,
-                        bottom=10
-                    ),
+                    padding=20,
                     content=ft.Text(
-                        "Getränkekasse",
+                        "BeverageOrganiser",
                         size=20,
-                        weight=ft.FontWeight.BOLD
-                    )
+                        weight=ft.FontWeight.BOLD,
+                    ),
                 ),
-
                 ft.Divider(),
-
                 ft.NavigationDrawerDestination(
                     icon=ft.Icons.PEOPLE_OUTLINE,
                     selected_icon=ft.Icons.PEOPLE,
-                    label="Personen & Budget"
+                    label="Personen & Budget",
                 ),
-
                 ft.NavigationDrawerDestination(
                     icon=ft.Icons.POINT_OF_SALE_OUTLINED,
                     selected_icon=ft.Icons.POINT_OF_SALE,
-                    label="Kassenübersicht"
+                    label="Kassenübersicht",
                 ),
-
                 ft.NavigationDrawerDestination(
                     icon=ft.Icons.LOCAL_BAR_OUTLINED,
                     selected_icon=ft.Icons.LOCAL_BAR,
-                    label="Sorten"
+                    label="Getränke",
                 ),
-
                 ft.NavigationDrawerDestination(
                     icon=ft.Icons.SETTINGS_OUTLINED,
                     selected_icon=ft.Icons.SETTINGS,
-                    label="Einstellungen"
+                    label="Einstellungen",
                 ),
-            ]
+            ],
         )
 
         self.page.drawer = self.navigation_drawer
+        self.content_panel = ft.Container(
+            expand=True,
+            padding=28,
+            bgcolor=ft.Colors.SURFACE,
+        )
+        self.navigation = ft.NavigationRail(
+            selected_index=0,
+            label_type=ft.NavigationRailLabelType.SELECTED,
+            min_width=84,
+            bgcolor=ft.Colors.SURFACE,
+            on_change=self.navigation_change,
+            destinations=[
+                ft.NavigationRailDestination(
+                    icon=ft.Icons.PEOPLE_OUTLINE,
+                    selected_icon=ft.Icons.PEOPLE,
+                    label="Personen",
+                ),
+                ft.NavigationRailDestination(
+                    icon=ft.Icons.POINT_OF_SALE_OUTLINED,
+                    selected_icon=ft.Icons.POINT_OF_SALE,
+                    label="Kasse",
+                ),
+                ft.NavigationRailDestination(
+                    icon=ft.Icons.LOCAL_BAR_OUTLINED,
+                    selected_icon=ft.Icons.LOCAL_BAR,
+                    label="Getränke",
+                ),
+                ft.NavigationRailDestination(
+                    icon=ft.Icons.SETTINGS_OUTLINED,
+                    selected_icon=ft.Icons.SETTINGS,
+                    label="Einstellungen",
+                ),
+            ],
+        )
+        self.body = ft.Container(expand=True)
+        self.page.add(self.body)
+        self.page.on_resize = self.on_page_resize
+        self.render()
 
     async def open_drawer(self, e):
         await self.page.show_drawer()
@@ -142,28 +180,57 @@ class DrinkCashApp:
 
         await self.page.close_drawer()
 
+    def navigation_change(self, e):
+        destinations = [
+            "person_main",
+            "overview_main",
+            "beverage_main",
+            "settings_main",
+        ]
+        index = e.control.selected_index
+        if index is not None and 0 <= index < len(destinations):
+            self.change_screen(destinations[index])
+
+    def on_page_resize(self, e):
+        wide_layout = (self.page.width or 0) >= 720
+        if wide_layout != self.wide_layout:
+            self.wide_layout = wide_layout
+            self.render()
+
+    def render(self):
+        destinations = [
+            "person_main",
+            "overview_main",
+            "beverage_main",
+            "settings_main",
+        ]
+        index = destinations.index(self.current_screen)
+        self.navigation.selected_index = index
+        self.navigation_drawer.selected_index = index
+        self.content_panel.content = self.screens[self.current_screen]
+        self.content_panel.padding = 28 if self.wide_layout else 16
+        self.body.content = (
+            ft.Row(
+                [
+                    self.navigation,
+                    ft.VerticalDivider(width=1, thickness=1),
+                    self.content_panel,
+                ],
+                expand=True,
+                spacing=0,
+            )
+            if self.wide_layout
+            else self.content_panel
+        )
+        self.page.update()
+
     def change_screen(self, screen_name):
         if screen_name not in self.screens:
             return
 
         self.current_screen = screen_name
 
-        screen = self.screens[screen_name]
-
-        # Screen zuerst in den festen Hauptbereich setzen
-        self.content_area.content = screen
-
-        # Drawer-Auswahl setzen
-        drawer_indices = {
-            "person_main": 0,
-            "overview_main": 1,
-            "beverage_main": 2,
-            "settings_main": 3
-        }
-
-        self.navigation_drawer.selected_index = drawer_indices.get(screen_name, 0)
-
-        self.page.update()
+        self.render()
 
     # ---------------------------------------------------------
     # DATEN LADEN
@@ -214,9 +281,7 @@ class DrinkCashApp:
         self.page.update()
 
 def main(page: ft.Page):
-    app = DrinkCashApp(page)
-    app.content_area.content = app.screens["person_main"]
-    page.update()
+    DrinkCashApp(page)
 
 if __name__ == "__main__":
     ft.run(main)

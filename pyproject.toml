@@ -1,6 +1,6 @@
 [project]
 name = "beverageorganiser"
-version = "1.2.4"
+version = "1.2.5"
 description = "Getränkekasse"
 requires-python = ">=3.11,<3.13"
 dependencies = [
@@ -12,7 +12,7 @@ dependencies = [
 ]
 
 [tool.flet]
-org = "de.jujfif"
+org = "de.beverageorganiser"
 product = "BeverageOrganiser"
 company = "JuJ-FiF"
 copyright = "Copyright © 2026 JuJ-FiF"

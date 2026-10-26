@@ -15,6 +15,7 @@ from Utils.data_store import (
     save_deposit_amounts as persist_deposit_amounts,
     validate_deposit_amounts,
 )
+from Screens.ui_components import ACCENT_COLOR, ACCENT_TEXT_COLOR
 
 class SettingsScreen(ft.Column):
 
@@ -60,90 +61,108 @@ class SettingsScreen(ft.Column):
         # -----------------------------------------------------
 
         self.file_picker = ft.FilePicker()
+        if self.file_picker not in self.app.page.services:
+            self.app.page.services.append(self.file_picker)
         self.settings_list = ft.ListView(
             expand=True,
-            spacing=0
+            spacing=18,
+            padding=ft.Padding.only(left=16, top=16, right=16, bottom=24),
         )
-
-        # -----------------------------------------------------
-        # 1. EXPORT
-        # -----------------------------------------------------
-
-        self.settings_list.controls.append(
-            ft.ListTile(
-                leading=ft.Icon(ft.Icons.DOWNLOAD),
-                title=ft.Text(
-                    "Daten exportieren",
-                    weight=ft.FontWeight.BOLD
-                ),
-                subtitle=ft.Text(
-                    "Sichert die aktuellen Daten (Personen, "
-                    "Ausgaben und Getränke) als JSON-Datei."
-                ),
-                on_click=self.export_data
-            )
+        self.deposit_amount_summary = ft.Text(
+            self.format_deposit_summary(self.app.deposit_amounts),
+            size=14,
+            color=ft.Colors.ON_SURFACE_VARIANT,
         )
-
-        self.settings_list.controls.append(ft.Divider())
-
-        # -----------------------------------------------------
-        # 2. IMPORT
-        # -----------------------------------------------------
-
-        self.settings_list.controls.append(
-            ft.ListTile(
-                leading=ft.Icon(ft.Icons.UPLOAD_FILE),
-                title=ft.Text(
-                    "Daten importieren",
-                    weight=ft.FontWeight.BOLD
+        self.settings_list.controls = [
+            self.settings_card(
+                title="Einzahlungen",
+                icon=ft.Icons.EURO,
+                description=self.deposit_amount_summary,
+                actions=[
+                    self.action_button(
+                        "Schnellbeträge anpassen",
+                        ft.Icons.EDIT_OUTLINED,
+                        self.open_deposit_amount_dialog,
+                    )
+                ],
+            ),
+            self.settings_card(
+                title="App-Updates",
+                icon=ft.Icons.SYSTEM_UPDATE,
+                description=(
+                    "Prüfe, ob eine neue Version der App verfügbar ist."
                 ),
-                subtitle=ft.Text(
-                    "Lädt eine zuvor exportierte JSON-Datei "
-                    "und stellt die Daten wieder her."
+                details=ft.Text(
+                    f"Installierte Version: {APP_VERSION}",
+                    size=14,
                 ),
-                on_click=self.import_data
-            )
-        )
-
-        self.settings_list.controls.append(
-            ft.Divider()
-        )
-
-        # -----------------------------------------------------
-        # 3. RESET
-        # -----------------------------------------------------
-
-        self.settings_list.controls.append(
-            ft.ListTile(
-                leading=ft.Icon(ft.Icons.RESTART_ALT),
-                title=ft.Text(
-                    "Kasse & Zähler zurücksetzen",
-                    weight=ft.FontWeight.BOLD
+                actions=[
+                    self.action_button(
+                        "Nach Updates suchen",
+                        ft.Icons.SYSTEM_UPDATE,
+                        self.check_updates,
+                    )
+                ],
+            ),
+            self.settings_card(
+                title="Daten sichern",
+                icon=ft.Icons.SWAP_HORIZ,
+                description=(
+                    "Personen, Buchungen, Ausgaben und Getränke als JSON-Datei "
+                    "sichern oder wiederherstellen."
                 ),
-                subtitle=ft.Text(
-                    "Setzt Budgets, Ausgaben und "
-                    "Getränkezähler auf 0. "
+                actions=[
+                    self.action_button(
+                        "Daten importieren",
+                        ft.Icons.UPLOAD_FILE,
+                        self.import_data,
+                    ),
+                    self.action_button(
+                        "Daten exportieren",
+                        ft.Icons.DOWNLOAD,
+                        self.export_data,
+                        primary=True,
+                    ),
+                ],
+            ),
+            self.settings_card(
+                title="Einstellungen sichern",
+                icon=ft.Icons.SETTINGS_BACKUP_RESTORE,
+                description=(
+                    "Schnellbeträge als JSON-Datei sichern oder von dort "
+                    "wiederherstellen."
+                ),
+                actions=[
+                    self.action_button(
+                        "Einstellungen importieren",
+                        ft.Icons.UPLOAD_FILE,
+                        self.import_settings,
+                    ),
+                    self.action_button(
+                        "Einstellungen exportieren",
+                        ft.Icons.DOWNLOAD,
+                        self.export_settings,
+                        primary=True,
+                    ),
+                ],
+            ),
+            self.settings_card(
+                title="Kassenverwaltung",
+                icon=ft.Icons.RESTART_ALT,
+                description=(
+                    "Setzt Budgets, Ausgaben und Getränkezähler zurück. "
                     "Personen und Sorten bleiben erhalten."
                 ),
-                on_click=self.confirm_reset_all
-            )
-        )
-
-        self.settings_list.controls.append(ft.Divider())
-        self.deposit_amount_summary = ft.Text(
-            self.format_deposit_summary(self.app.deposit_amounts)
-        )
-        self.settings_list.controls.append(
-            ft.ListTile(
-                leading=ft.Icon(ft.Icons.EURO),
-                title=ft.Text(
-                    "Einzahlungsbeträge",
-                    weight=ft.FontWeight.BOLD,
-                ),
-                subtitle=self.deposit_amount_summary,
-                on_click=self.open_deposit_amount_dialog,
-            )
-        )
+                actions=[
+                    self.action_button(
+                        "Kasse & Zähler zurücksetzen",
+                        ft.Icons.RESTART_ALT,
+                        self.confirm_reset_all,
+                        color=ft.Colors.ERROR,
+                    )
+                ],
+            ),
+        ]
 
         self.controls = [
             self.update_status,
@@ -155,31 +174,70 @@ class SettingsScreen(ft.Column):
             )
         ]
 
-        # -----------------------------------------------------
-        # 4. NACH UPDATES SUCHEN
-        # -----------------------------------------------------
-
-        self.settings_list.controls.append(
-            ft.Divider()
-        )
-
-        self.settings_list.controls.append(
-            ft.ListTile(
-                leading=ft.Icon(ft.Icons.SYSTEM_UPDATE),
-                title=ft.Text(
-                    "Nach Updates suchen",
-                    weight=ft.FontWeight.BOLD
-                ),
-                subtitle=ft.Text(
-                    f"Aktuelle Version: {APP_VERSION}"
-                ),
-                on_click=self.check_updates
-            )
-        )
 
     # =========================================================
     # DATEN FÜR EXPORT ERSTELLEN
     # =========================================================
+
+    def settings_card(self, title, icon, description, actions, details=None):
+        content = [
+            ft.Row(
+                [
+                    ft.Icon(icon, color=ACCENT_COLOR, size=24),
+                    ft.Text(title, size=18, weight=ft.FontWeight.BOLD),
+                ],
+                spacing=12,
+            ),
+        ]
+        if details is not None:
+            content.append(details)
+        content.extend(
+            [
+                description
+                if isinstance(description, ft.Control)
+                else ft.Text(
+                    description,
+                    size=14,
+                    color=ft.Colors.ON_SURFACE_VARIANT,
+                ),
+                ft.Column(actions, spacing=8, tight=True),
+            ]
+        )
+        return ft.Card(
+            variant=ft.CardVariant.OUTLINED,
+            elevation=0,
+            shape=ft.RoundedRectangleBorder(radius=16),
+            content=ft.Container(
+                padding=20,
+                content=ft.Column(content, spacing=12, tight=True),
+            ),
+        )
+
+    @staticmethod
+    def action_button(label, icon, on_click, primary=False, color=None):
+        foreground = color or ACCENT_COLOR
+        shape = ft.RoundedRectangleBorder(radius=22)
+        if primary:
+            return ft.FilledButton(
+                label,
+                icon=icon,
+                on_click=on_click,
+                style=ft.ButtonStyle(
+                    bgcolor=ACCENT_COLOR if color is None else color,
+                    color=ACCENT_TEXT_COLOR if color is None else ft.Colors.WHITE,
+                    shape=shape,
+                ),
+            )
+        return ft.OutlinedButton(
+            label,
+            icon=icon,
+            on_click=on_click,
+            style=ft.ButtonStyle(
+                color=foreground,
+                side=ft.BorderSide(1, foreground),
+                shape=shape,
+            ),
+        )
 
     def create_export_data(self):
         return create_export_data(
@@ -191,7 +249,7 @@ class SettingsScreen(ft.Column):
     @staticmethod
     def format_deposit_summary(amounts):
         values = " · ".join(f"{format_euro_amount(amount)} €" for amount in amounts)
-        return f"Schnellbeträge ändern - (aktuell: {values})"
+        return f"Schnellbeträge für Einzahlungen · {values}"
 
     def open_deposit_amount_dialog(self, e=None):
         fields = [
@@ -268,6 +326,98 @@ class SettingsScreen(ft.Column):
         self.show_dialog(
             "Einzahlungsbeträge gespeichert",
             "Die neuen Schnellbeträge werden ab sofort verwendet.",
+        )
+
+    async def export_settings(self, e=None):
+        try:
+            settings = {"deposit_amounts": self.app.deposit_amounts}
+            file_bytes = json.dumps(
+                settings,
+                ensure_ascii=False,
+                indent=4,
+            ).encode("utf-8")
+            result = await self.file_picker.save_file(
+                dialog_title="Einstellungen sichern",
+                file_name="beverageorganiser_einstellungen.json",
+                file_type=ft.FilePickerFileType.CUSTOM,
+                allowed_extensions=["json"],
+                src_bytes=file_bytes,
+            )
+            if result:
+                self.show_dialog(
+                    "Einstellungen exportiert",
+                    "Die Schnellbeträge wurden exportiert.",
+                )
+        except Exception as ex:
+            self.show_dialog(
+                "Export fehlgeschlagen",
+                f"Einstellungen konnten nicht exportiert werden:\n{ex}",
+            )
+
+    async def import_settings(self, e=None):
+        try:
+            files = await self.file_picker.pick_files(
+                dialog_title="Einstellungen importieren",
+                file_type=ft.FilePickerFileType.CUSTOM,
+                allowed_extensions=["json"],
+                allow_multiple=False,
+                with_data=True,
+            )
+            if not files:
+                return
+            if not files[0].bytes:
+                raise ValueError("Die ausgewählte Datei konnte nicht gelesen werden.")
+
+            data = json.loads(files[0].bytes.decode("utf-8"))
+            if isinstance(data, dict) and isinstance(data.get("settings"), dict):
+                data = data["settings"]
+            if not isinstance(data, dict):
+                raise ValueError("Die Datei enthält keine gültigen Einstellungen.")
+            amounts = validate_deposit_amounts(data.get("deposit_amounts"))
+        except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError) as ex:
+            self.show_dialog("Import fehlgeschlagen", str(ex))
+            return
+        except Exception as ex:
+            self.show_dialog(
+                "Import fehlgeschlagen",
+                f"Einstellungen konnten nicht importiert werden:\n{ex}",
+            )
+            return
+
+        formatted = " · ".join(
+            f"{format_euro_amount(amount)} €" for amount in amounts
+        )
+
+        def apply_settings(_):
+            try:
+                self.app.deposit_amounts = persist_deposit_amounts(
+                    self.app.data_file_path,
+                    amounts,
+                )
+            except (OSError, ValueError) as ex:
+                self.app.page.pop_dialog()
+                self.show_dialog(
+                    "Import fehlgeschlagen",
+                    f"Die Einstellungen konnten nicht gespeichert werden:\n{ex}",
+                )
+                return
+
+            self.deposit_amount_summary.value = self.format_deposit_summary(
+                self.app.deposit_amounts
+            )
+            self.app.page.pop_dialog()
+            self.app.refresh_all_screens()
+            self.show_dialog(
+                "Einstellungen importiert",
+                "Die Schnellbeträge wurden übernommen.",
+            )
+
+        show_confirmation_dialog(
+            self.app.page,
+            "Einstellungen importieren",
+            f"Die aktuellen Schnellbeträge werden ersetzt durch:\n{formatted}",
+            "Importieren",
+            apply_settings,
         )
 
     # =========================================================

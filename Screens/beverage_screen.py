@@ -2,6 +2,7 @@ import flet as ft
 
 from Utils.classes import Beverage
 from Screens.dialogs import show_confirmation_dialog
+from Screens.ui_components import primary_button, screen_heading, surface_card
 
 class BeverageScreen(ft.Column):
 
@@ -19,36 +20,21 @@ class BeverageScreen(ft.Column):
         )
 
         self.controls = [
-            ft.Container(
-                padding=16,
-                content=ft.Text(
-                    "Getränkearten & Sorten",
-                    size=22,
-                    weight=ft.FontWeight.BOLD,
+            screen_heading(
+                "Getränke",
+                "Sorten und gekaufte Mengen verwalten.",
+                primary_button(
+                    "Sorte hinzufügen",
+                    ft.Icons.ADD,
+                    self.open_add_beverage_dialog,
                 ),
             ),
-            ft.Container(
-                padding=ft.Padding.symmetric(horizontal=16),
-                content=ft.Row(
-                    controls=[
-                        ft.Text(
-                            "Gedrückt halten zum Löschen",
-                            size=13,
-                            expand=True,
-                        ),
-                        ft.FilledButton(
-                            "Sorte hinzufügen",
-                            icon=ft.Icons.ADD,
-                            on_click=self.open_add_beverage_dialog,
-                        ),
-                    ],
-                ),
+            ft.Text(
+                "Gedrückt halten, um eine Sorte zu löschen.",
+                size=13,
+                color=ft.Colors.ON_SURFACE_VARIANT,
             ),
-            ft.Container(
-                expand=True,
-                padding=ft.Padding.symmetric(horizontal=16),
-                content=self.beverage_list,
-            ),
+            ft.Container(expand=True, content=self.beverage_list),
         ]
 
         self.update_list()
@@ -61,22 +47,23 @@ class BeverageScreen(ft.Column):
         self.beverage_list.controls.clear()
 
         for beverage in self.app.beverage_objects:
-            tile = ft.Container(
-                bgcolor="#D7C9A8",
-                border_radius=10,
-                padding=ft.Padding.only(left=16, bottom=4),
-                content=ft.ListTile(
+            tile = surface_card(
+                ft.ListTile(
+                    leading=ft.Icon(
+                        ft.Icons.LOCAL_BAR_OUTLINED,
+                        color=ft.Colors.PRIMARY,
+                    ),
                     title=ft.Text(
                         beverage.name,
                         weight=ft.FontWeight.BOLD,
-                        color=ft.Colors.BLACK,
                     ),
                     subtitle=ft.Text(
                         f"Gesamt gekauft: {beverage.count}x",
-                        color=ft.Colors.BLACK_87,
+                        color=ft.Colors.ON_SURFACE_VARIANT,
                     ),
-                    content_padding=ft.Padding.zero(),
+                    content_padding=ft.Padding.symmetric(horizontal=8),
                 ),
+                padding=4,
             )
 
             self.beverage_list.controls.append(
