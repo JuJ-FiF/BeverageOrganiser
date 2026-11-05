@@ -53,6 +53,12 @@ class DrinkCashApp:
         self.page.dark_theme = theme
         self.page.padding = 0
         self.wide_layout = (self.page.width or 0) >= 720
+        self.update_status_banner = ft.Container(
+            visible=False,
+            bgcolor=ft.Colors.GREEN,
+            margin=ft.Margin.only(bottom=14),
+            padding=ft.Padding(left=16, right=16, top=10, bottom=10),
+        )
 
         self.page.appbar = ft.AppBar(
             title=ft.Row(
@@ -158,7 +164,13 @@ class DrinkCashApp:
             ],
         )
         self.body = ft.Container(expand=True)
-        self.page.add(self.body)
+        self.page_content = ft.Column(
+            controls=[self.update_status_banner, self.body],
+            expand=True,
+            spacing=0,
+            horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+        )
+        self.page.add(self.page_content)
         self.page.on_resize = self.on_page_resize
         self.render()
 

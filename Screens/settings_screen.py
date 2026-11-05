@@ -1,5 +1,7 @@
+import asyncio
 import copy
 import json
+import sys
 import flet as ft
 
 from Utils.data_transfer import (
@@ -8,7 +10,13 @@ from Utils.data_transfer import (
     validate_import_data,
 )
 from Screens.dialogs import show_confirmation_dialog, show_message_dialog
-from Utils.updater import check_for_update, download_and_install_update
+from Utils.updater import (
+    check_for_update,
+    download_apk,
+    open_security_settings as open_android_security_settings,
+    request_install_permission,
+    start_android_update,
+)
 from Utils.version import APP_VERSION
 from Utils.data_store import (
     format_euro_amount,
@@ -23,8 +31,7 @@ class SettingsScreen(ft.Column):
         super().__init__(
             expand=True,
             horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
-            spacing=20,
-            scroll=ft.ScrollMode.AUTO,
+            spacing=0,
         )
 
         self.app = app
@@ -33,30 +40,7 @@ class SettingsScreen(ft.Column):
         # UPDATE ANZEIGE
         # -----------------------------------------------------
 
-        self.update_status = ft.Container(
-            visible=False,
-            bgcolor=ft.Colors.GREEN,
-            padding=ft.Padding(
-                left=16,
-                right=16,
-                top=10,
-                bottom=10
-            ),
-            content=ft.Row(
-                [
-                    ft.Icon(
-                        ft.Icons.CHECK_CIRCLE,
-                        color=ft.Colors.WHITE
-                    ),
-                    ft.Text(
-                        "Update wird vorbereitet …",
-                        color=ft.Colors.WHITE,
-                        weight=ft.FontWeight.BOLD
-                    )
-                ],
-                spacing=10
-            )
-        )
+        self.update_status = self.app.update_status_banner
 
         # -----------------------------------------------------
         # FILE PICKER
@@ -160,14 +144,20 @@ class SettingsScreen(ft.Column):
             ),
         ]
 
-        self.controls = [
-            screen_heading(
-                "Einstellungen",
-                "Einzahlungen, Daten und App verwalten.",
-            ),
-            self.update_status,
-            *settings_cards,
-        ]
+        self.settings_content = ft.Column(
+            controls=[
+                screen_heading(
+                    "Einstellungen",
+                    "Einzahlungen, Daten und App verwalten.",
+                ),
+                *settings_cards,
+            ],
+            expand=True,
+            spacing=20,
+            scroll=ft.ScrollMode.AUTO,
+            horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+        )
+        self.controls = [self.settings_content]
 
 
     # =========================================================
@@ -654,25 +644,30 @@ class SettingsScreen(ft.Column):
             e.control.disabled = True
             e.control.update()
 
+        self.set_update_status("Suche nach Updates …")
         try:
-
             update = await check_for_update()
 
             if update is None:
-                self.show_dialog(
-                    "Keine Updates",
-                    (
-                        "Du verwendest bereits die "
-                        f"aktuelle Version {APP_VERSION}."
+                if sys.platform == "win32":
+                    await self.simulate_update_process()
+                else:
+                    self.hide_update_status()
+                    self.show_dialog(
+                        "Keine Updates",
+                        (
+                            "Du verwendest bereits die "
+                            f"aktuelle Version {APP_VERSION}."
+                        )
                     )
-                )
 
                 return
 
+            self.hide_update_status()
             self.show_update_dialog(update)
 
         except Exception as ex:
-
+            self.hide_update_status()
             self.show_dialog(
                 "Updateprüfung fehlgeschlagen",
                 (
@@ -683,7 +678,6 @@ class SettingsScreen(ft.Column):
             )
 
         finally:
-
             if e is not None and hasattr(e, "control"):
                 e.control.disabled = False
                 e.control.update()
@@ -699,7 +693,7 @@ class SettingsScreen(ft.Column):
             modal=True,
 
             title=ft.Text(
-                f"Update verfügbar: v{update['version']}"
+                f"Update verfügbar: {update['version']}"
             ),
 
             content=ft.Column(
@@ -732,62 +726,118 @@ class SettingsScreen(ft.Column):
             dialog
         )
 
-    def show_update_status(self):
-
-        self.update_status.visible = True
-
+    def set_update_status(self, message, icon=None):
+        indicator = (
+            ft.Icon(icon, color=ft.Colors.WHITE)
+            if icon
+            else ft.ProgressRing(
+                width=20,
+                height=20,
+                stroke_width=2,
+                color=ft.Colors.WHITE,
+            )
+        )
         self.update_status.content = ft.Row(
             [
-                ft.Icon(
-                    ft.Icons.CHECK_CIRCLE,
-                    color=ft.Colors.WHITE
-                ),
+                indicator,
                 ft.Text(
-                    "Update wird vorbereitet …",
+                    message,
                     color=ft.Colors.WHITE,
-                    weight=ft.FontWeight.BOLD
-                )
+                    weight=ft.FontWeight.BOLD,
+                ),
             ],
-            spacing=10
+            spacing=10,
         )
-
+        self.update_status.visible = True
         self.update_status.update()
 
     def hide_update_status(self):
-
         self.update_status.visible = False
         self.update_status.update()
 
-    async def download_update(
-            self,
-            download_url
-    ):
+    async def simulate_update_process(self):
+        steps = [
+            ("Updatevorgang wird unter Windows simuliert …", None),
+            ("Download wird simuliert …", None),
+            ("Installationsdialog wird simuliert …", ft.Icons.SYSTEM_UPDATE),
+        ]
+        for message, icon in steps:
+            self.set_update_status(message, icon)
+            await asyncio.sleep(0.7)
+        self.set_update_status(
+            f"Simulation abgeschlossen · Version {APP_VERSION} bleibt installiert.",
+            ft.Icons.CHECK_CIRCLE,
+        )
+        await asyncio.sleep(2)
+        self.hide_update_status()
 
-        try:
-
-            # ---------------------------------------------
-            # Update-Dialog schließen
-            # ---------------------------------------------
-
-            self.app.page.pop_dialog()
-
-            # ---------------------------------------------
-            # Grünen Status-Balken anzeigen
-            # ---------------------------------------------
-
-            self.show_update_status()
-
-            # ---------------------------------------------
-            # APK herunterladen und Installer starten
-            # ---------------------------------------------
-
-            apk_path = (
-                await download_and_install_update(
-                    download_url
+    def show_update_safety_dialog(self, download_url):
+        async def open_settings(_):
+            try:
+                await asyncio.to_thread(open_android_security_settings)
+            except Exception as error:
+                self.show_dialog(
+                    "Sicherheitseinstellungen konnten nicht geöffnet werden",
+                    str(error),
                 )
-            )
 
-            if apk_path is None:
+        async def continue_update(_):
+            self.app.page.pop_dialog()
+            await self.download_update(download_url, safety_confirmed=True)
+
+        self.app.page.show_dialog(
+            ft.AlertDialog(
+                modal=True,
+                title=ft.Text("Automatischen Schutz prüfen"),
+                content=ft.Column(
+                    [
+                        ft.Text(
+                            "Auf einigen neueren Android-Geräten, besonders "
+                            "Samsung Galaxy, kann der Automatische Schutz "
+                            "(Automatische Sperre) die Installation dieses "
+                            "Updates blockieren. Falls nötig, öffne Sicherheit "
+                            "und Datenschutz → Automatische Sperre und deaktiviere "
+                            "den Schutz vorübergehend. Aktiviere ihn nach dem "
+                            "Update wieder."
+                        ),
+                        ft.OutlinedButton(
+                            "Sicherheitseinstellungen öffnen",
+                            icon=ft.Icons.SECURITY,
+                            on_click=open_settings,
+                        ),
+                    ],
+                    tight=True,
+                    spacing=14,
+                ),
+                actions=[
+                    ft.TextButton(
+                        "Abbrechen",
+                        on_click=lambda _: self.app.page.pop_dialog(),
+                    ),
+                    ft.FilledButton(
+                        "Weiter",
+                        icon=ft.Icons.ARROW_FORWARD,
+                        on_click=continue_update,
+                    ),
+                ],
+            )
+        )
+
+    async def download_update(self, download_url, safety_confirmed=False):
+        try:
+            if sys.platform == "win32":
+                self.app.page.pop_dialog()
+                await self.simulate_update_process()
+                return
+
+            if not safety_confirmed:
+                self.app.page.pop_dialog()
+                self.show_update_safety_dialog(download_url)
+                return
+
+            self.set_update_status("Installationsberechtigung wird geprüft …")
+            can_install = await asyncio.to_thread(request_install_permission)
+            if not can_install:
                 self.hide_update_status()
                 self.show_dialog(
                     "Installation erlauben",
@@ -798,38 +848,16 @@ class SettingsScreen(ft.Column):
                 )
                 return
 
-            # ---------------------------------------------
-            # Status aktualisieren
-            # ---------------------------------------------
-
-            self.update_status.content = ft.Row(
-                [
-                    ft.Icon(
-                        ft.Icons.SYSTEM_UPDATE,
-                        color=ft.Colors.WHITE
-                    ),
-                    ft.Text(
-                        "Update wird installiert …",
-                        color=ft.Colors.WHITE,
-                        weight=ft.FontWeight.BOLD
-                    )
-                ],
-                spacing=10
+            self.set_update_status("Update wird heruntergeladen …")
+            apk_path = await asyncio.to_thread(download_apk, download_url)
+            self.set_update_status("Installationsdialog wird geöffnet …")
+            await asyncio.to_thread(start_android_update, apk_path)
+            self.set_update_status(
+                "Bitte das Update im Android-Installationsdialog bestätigen.",
+                ft.Icons.SYSTEM_UPDATE,
             )
-
-            self.update_status.update()
-
-            # ---------------------------------------------
-            # KEIN weiterer Dialog
-            #
-            # Android zeigt jetzt seinen eigenen
-            # Installationsdialog.
-            # ---------------------------------------------
-
         except Exception as ex:
-
             self.hide_update_status()
-
             self.show_dialog(
                 "Update fehlgeschlagen",
                 "Das Update konnte nicht "

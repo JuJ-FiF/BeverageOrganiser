@@ -1,7 +1,15 @@
+"""GitHub-Release-Prüfung und Android-APK-Installation."""
+
+from __future__ import annotations
+
 import asyncio
 import json
 import os
 import re
+import sys
+import tempfile
+import zipfile
+from urllib.error import HTTPError
 from pathlib import Path
 from urllib.request import Request, urlopen
 
@@ -9,554 +17,175 @@ from Utils.version import APP_VERSION
 
 GITHUB_OWNER = "JuJ-FiF"
 GITHUB_REPOSITORY = "BeverageOrganiser"
-
-ANDROID_PACKAGE_NAME = "de.jujfif.beverageorganiser"
-
 APK_FILE_NAME = "BeverageOrganiser-update.apk"
+USER_AGENT = "BeverageOrganiser"
 
-# =========================================================
-# VERSIONSVERGLEICH
-# =========================================================
 
-def version_tuple(version):
-    """
-    Wandelt eine Versionsnummer in einen vergleichbaren
-    Zahlen-Tupel um.
-
-    Unterstützte Formate:
-
-        1.2.0
-        v1.2.0
-        1.2.0-HotFix#1
-        v1.2.0-HotFix#1
-        1.2.0-HotFix#25
-
-    Beispiele:
-
-        1.2.0
-            -> (1, 2, 0, 0)
-
-        v1.2.0
-            -> (1, 2, 0, 0)
-
-        1.2.0-HotFix#1
-            -> (1, 2, 0, 1)
-
-        v1.2.0-HotFix#5
-            -> (1, 2, 0, 5)
-    """
-
-    version = str(
-        version
-    ).strip()
-
-    # -----------------------------------------------------
-    # Führendes "v" entfernen
-    # -----------------------------------------------------
-
-    if version.lower().startswith("v"):
-
-        version = version[1:]
-
-    # -----------------------------------------------------
-    # Hauptversion + optionalen HotFix extrahieren
-    #
-    # Beispiele:
-    #
-    # 1.2.0
-    # 1.2.0-HotFix#1
-    # -----------------------------------------------------
-
-    match = re.match(
-        r"^(\d+)"
-        r"(?:\.(\d+))?"
-        r"(?:\.(\d+))?"
-        r"(?:-HotFix#(\d+))?"
-        r"$",
-        version,
-        re.IGNORECASE
-    )
-
+def version_tuple(version: str) -> tuple[int, int, int, int]:
+    """Unterstützt v1.2.3 und optionale Tags wie 1.2.3-HotFix#4."""
+    value = str(version).strip().removeprefix("v").removeprefix("V")
+    match = re.fullmatch(r"(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:-HotFix#(\d+))?", value, re.I)
     if not match:
+        raise ValueError(f"Ungültige Versionsnummer: {version}")
+    return tuple(int(part or 0) for part in match.groups())
 
-        raise ValueError(
-            f"Ungültige Versionsnummer: {version}"
-        )
 
-    major = int(
-        match.group(1)
-    )
+def is_newer_version(current_version: str, latest_version: str) -> bool:
+    return version_tuple(latest_version) > version_tuple(current_version)
 
-    minor = int(
-        match.group(2) or 0
-    )
 
-    patch = int(
-        match.group(3) or 0
-    )
-
-    hotfix = int(
-        match.group(4) or 0
-    )
-
+def is_android_runtime() -> bool:
     return (
-        major,
-        minor,
-        patch,
-        hotfix
+        os.environ.get("FLET_PLATFORM", "").casefold() == "android"
+        or sys.platform == "android"
+        or "ANDROID_ARGUMENT" in os.environ
     )
 
-def is_newer_version(
-    current_version,
-    latest_version
-):
-    """
-    Prüft, ob latest_version neuer als
-    current_version ist.
 
-    Beispiele:
+async def check_for_update() -> dict | None:
+    """Liest das neueste GitHub-Release und sucht darin nach einer APK."""
+    url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPOSITORY}/releases/latest"
+    request = Request(url, headers={"Accept": "application/vnd.github+json", "User-Agent": USER_AGENT})
 
-        1.2.0 -> 1.2.1
-        True
-
-        1.2.0 -> 1.2.0-HotFix#1
-        True
-
-        1.2.0-HotFix#1 -> 1.2.0-HotFix#2
-        True
-
-        1.2.0-HotFix#2 -> 1.2.0-HotFix#1
-        False
-
-        1.2.0-HotFix#99 -> 1.2.1
-        True
-    """
-
-    return (
-        version_tuple(latest_version)
-        >
-        version_tuple(current_version)
-    )
-
-# =========================================================
-# GITHUB UPDATE PRÜFEN
-# =========================================================
-
-async def check_for_update():
-
-    url = (
-        "https://api.github.com/repos/"
-        f"{GITHUB_OWNER}/"
-        f"{GITHUB_REPOSITORY}/"
-        "releases/latest"
-    )
-
-    request = Request(
-        url,
-        headers={
-            "Accept": "application/vnd.github+json",
-            "User-Agent": "BeverageOrganiser",
-        },
-    )
-
-    def load_release():
-
-        with urlopen(
-            request,
-            timeout=10
-        ) as response:
-
-            return json.loads(
-                response.read().decode("utf-8")
-            )
-
-    data = await asyncio.to_thread(
-        load_release
-    )
-
-    # -----------------------------------------------------
-    # Version aus GitHub Release
-    # -----------------------------------------------------
-
-    latest_version = data.get(
-        "tag_name",
-        ""
-    )
-
-    if not latest_version:
-
-        return None
-
-    latest_version = (
-        latest_version
-        .strip()
-        .lstrip("v")
-    )
-
-    # -----------------------------------------------------
-    # Versionsformat prüfen
-    # -----------------------------------------------------
+    def load_release() -> dict:
+        with urlopen(request, timeout=20) as response:
+            return json.loads(response.read().decode("utf-8"))
 
     try:
-
-        version_tuple(
-            latest_version
-        )
-
-    except ValueError as ex:
-
-        print(
-            "Ungültige GitHub-Version:",
-            latest_version,
-            ex
-        )
-
+        release = await asyncio.to_thread(load_release)
+    except HTTPError as error:
+        if error.code == 404:
+            raise RuntimeError(
+                "Kein öffentliches GitHub-Release gefunden. Prüfe, ob das Repository öffentlich ist "
+                "und bereits ein Release mit APK enthält."
+            ) from error
+        raise
+    latest = str(release.get("tag_name", "")).strip()
+    if not latest:
+        raise ValueError("Das GitHub-Release enthält keinen Versions-Tag.")
+    version_tuple(latest)
+    if not is_newer_version(APP_VERSION, latest):
         return None
 
-    # -----------------------------------------------------
-    # Update verfügbar?
-    # -----------------------------------------------------
-
-    if not is_newer_version(
-        APP_VERSION,
-        latest_version
-    ):
-
-        return None
-
-    # -----------------------------------------------------
-    # APK suchen
-    # -----------------------------------------------------
-
-    download_url = None
-
-    for asset in data.get(
-        "assets",
-        []
-    ):
-
-        asset_name = asset.get(
-            "name",
-            ""
-        ).lower()
-
-        if asset_name.endswith(".apk"):
-
-            download_url = asset.get(
-                "browser_download_url"
-            )
-
-            break
-
+    asset = next(
+        (item for item in release.get("assets", []) if str(item.get("name", "")).lower().endswith(".apk")),
+        None,
+    )
+    download_url = asset.get("browser_download_url") if asset else None
     if not download_url:
-
-        return None
-
-    # -----------------------------------------------------
-    # Update zurückgeben
-    # -----------------------------------------------------
-
+        raise ValueError(f"Für Version {latest} wurde keine APK im Release gefunden.")
     return {
-        "version": latest_version,
-        "name": data.get(
-            "name",
-            f"Version {latest_version}"
-        ),
-        "changelog": data.get(
-            "body",
-            ""
-        ),
+        "version": latest,
+        "name": release.get("name") or f"BeverageOrganiser {latest}",
+        "changelog": release.get("body") or "Keine Release-Notizen vorhanden.",
         "download_url": download_url,
     }
 
-# =========================================================
-# APK-DATEIPFAD
-# =========================================================
 
-def get_update_file_path():
+def get_update_file_path() -> Path:
+    directory = Path(os.environ.get("FLET_APP_STORAGE_DATA") or Path.cwd())
+    directory.mkdir(parents=True, exist_ok=True)
+    return directory / APK_FILE_NAME
 
-    storage_dir = os.environ.get(
-        "FLET_APP_STORAGE_DATA"
+
+def download_apk(download_url: str) -> Path:
+    """Lädt eine APK in eine temporäre Datei und ersetzt erst danach die alte."""
+    path = get_update_file_path()
+    request = Request(download_url, headers={"User-Agent": USER_AGENT, "Accept": "application/octet-stream"})
+    descriptor, temporary = tempfile.mkstemp(
+        prefix="BeverageOrganiser-update-",
+        suffix=".apk",
+        dir=path.parent,
     )
+    try:
+        with os.fdopen(descriptor, "wb") as output, urlopen(request, timeout=120) as response:
+            while chunk := response.read(1024 * 1024):
+                output.write(chunk)
+        if not zipfile.is_zipfile(temporary):
+            raise RuntimeError("Die heruntergeladene Datei ist keine gültige APK/ZIP-Datei.")
+        os.replace(temporary, path)
+    except Exception:
+        try:
+            os.unlink(temporary)
+        except OSError:
+            pass
+        raise
+    return path
 
-    if not storage_dir:
 
-        storage_dir = os.getcwd()
-
-    storage_path = Path(
-        storage_dir
-    )
-
-    storage_path.mkdir(
-        parents=True,
-        exist_ok=True
-    )
-
-    return (
-        storage_path
-        / APK_FILE_NAME
-    )
-
-# =========================================================
-# APK HERUNTERLADEN
-# =========================================================
-
-def download_apk(
-    download_url
-):
-
-    apk_path = get_update_file_path()
-
-    request = Request(
-        download_url,
-        headers={
-            "User-Agent": "BeverageOrganiser",
-            "Accept": "application/octet-stream",
-        },
-    )
-
-    # -----------------------------------------------------
-    # Alte APK löschen
-    # -----------------------------------------------------
-
-    if apk_path.exists():
-
-        apk_path.unlink()
-
-    # -----------------------------------------------------
-    # APK herunterladen
-    # -----------------------------------------------------
-
-    with urlopen(
-        request,
-        timeout=120
-    ) as response:
-
-        with open(
-            apk_path,
-            "wb"
-        ) as file:
-
-            while True:
-
-                chunk = response.read(
-                    1024 * 1024
-                )
-
-                if not chunk:
-
-                    break
-
-                file.write(
-                    chunk
-                )
-
-    # -----------------------------------------------------
-    # Download überprüfen
-    # -----------------------------------------------------
-
-    if not apk_path.exists():
-
-        raise RuntimeError(
-            "APK wurde nicht erstellt."
-        )
-
-    if apk_path.stat().st_size == 0:
-
-        raise RuntimeError(
-            "Die heruntergeladene APK ist leer."
-        )
-
-    return apk_path
-
-# =========================================================
-# ANDROID UPDATE STARTEN
-# =========================================================
-
-def request_install_permission():
-    """Return True if APK installs are allowed; otherwise open Android settings."""
+def open_security_settings() -> None:
+    """Öffnet Androids Sicherheitsbereich für den Schutz vor APK-Installationen."""
     from jnius import autoclass, cast
 
-    PythonActivity = autoclass(
-        "com.flet.serious_python_android.PythonActivity"
-    )
-    activity = cast(
-        "android.app.Activity",
-        PythonActivity.mActivity,
-    )
+    activity_class = autoclass("com.flet.serious_python_android.PythonActivity")
+    activity = cast("android.app.Activity", activity_class.mActivity)
     if activity is None:
         raise RuntimeError("Die Android Activity ist nicht verfügbar.")
 
+    Intent = autoclass("android.content.Intent")
+    Settings = autoclass("android.provider.Settings")
+    try:
+        activity.startActivity(Intent(Settings.ACTION_SECURITY_SETTINGS))
+    except Exception:
+        activity.startActivity(Intent(Settings.ACTION_SETTINGS))
+
+
+def request_install_permission() -> bool:
+    """Öffnet bei Bedarf Androids Berechtigung für App-Installationen."""
+    from jnius import autoclass, cast
+
+    activity_class = autoclass("com.flet.serious_python_android.PythonActivity")
+    activity = cast("android.app.Activity", activity_class.mActivity)
+    if activity is None:
+        raise RuntimeError("Die Android Activity ist nicht verfügbar.")
     if activity.getPackageManager().canRequestPackageInstalls():
         return True
 
     Intent = autoclass("android.content.Intent")
     Uri = autoclass("android.net.Uri")
     Settings = autoclass("android.provider.Settings")
-    settings_intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES)
-    settings_intent.setData(
-        Uri.parse("package:" + activity.getPackageName())
-    )
-    activity.startActivity(settings_intent)
+    intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES)
+    intent.setData(Uri.parse("package:" + activity.getPackageName()))
+    activity.startActivity(intent)
     return False
 
 
-def start_android_update(
-    apk_path
-):
-    """
-    Startet den Android-Installationsdialog
-    direkt über die Android-Java-API.
-    """
-
+def start_android_update(apk_path: Path) -> None:
+    """Öffnet den nativen Android-Installer für die heruntergeladene APK."""
     from jnius import autoclass, cast
 
-    apk_path = Path(
-        apk_path
-    )
-
-    # -----------------------------------------------------
-    # APK prüfen
-    # -----------------------------------------------------
-
-    if not apk_path.exists():
-
-        raise RuntimeError(
-            "APK-Datei wurde nicht gefunden:\n"
-            f"{apk_path}"
-        )
-
-    if apk_path.stat().st_size <= 0:
-
-        raise RuntimeError(
-            "APK-Datei ist leer."
-        )
-
-    # -----------------------------------------------------
-    # Flet / Serious Python Activity
-    # -----------------------------------------------------
-
-    PythonActivity = autoclass(
-        "com.flet.serious_python_android.PythonActivity"
-    )
-
-    activity = cast(
-        "android.app.Activity",
-        PythonActivity.mActivity
-    )
-
+    path = Path(apk_path)
+    if not path.is_file() or path.stat().st_size == 0:
+        raise RuntimeError("Die heruntergeladene APK fehlt oder ist leer.")
+    activity_class = autoclass("com.flet.serious_python_android.PythonActivity")
+    activity = cast("android.app.Activity", activity_class.mActivity)
     if activity is None:
+        raise RuntimeError("Die Android Activity ist nicht verfügbar.")
 
-        raise RuntimeError(
-            "Die Android Activity ist nicht verfügbar."
-        )
-
-    # -----------------------------------------------------
-    # Android-Klassen
-    # -----------------------------------------------------
-
-    Intent = autoclass(
-        "android.content.Intent"
-    )
-
-    Uri = autoclass(
-        "android.net.Uri"
-    )
-
-    File = autoclass(
-        "java.io.File"
-    )
-
-    FileProvider = autoclass(
-        "androidx.core.content.FileProvider"
-    )
-
-    # -----------------------------------------------------
-    # Installationsberechtigung erneut prüfen, falls sie sich geändert hat.
-    # -----------------------------------------------------
-
+    Intent = autoclass("android.content.Intent")
+    File = autoclass("java.io.File")
+    FileProvider = autoclass("androidx.core.content.FileProvider")
     if not request_install_permission():
-        raise RuntimeError(
-            "Die Installation unbekannter Apps ist für diese Quelle "
-            "noch nicht erlaubt. Bitte erteile die Berechtigung und "
-            "starte das Update erneut."
-        )
+        raise RuntimeError("Die Berechtigung zur Installation unbekannter Apps wurde nicht erteilt.")
 
-    # -----------------------------------------------------
-    # APK als Java File
-    # -----------------------------------------------------
-
-    apk_file = File(
-        str(apk_path)
+    apk_uri = FileProvider.getUriForFile(
+        activity,
+        activity.getPackageName() + ".updateprovider",
+        File(str(path)),
     )
+    intent = Intent(Intent.ACTION_INSTALL_PACKAGE)
+    intent.setDataAndType(apk_uri, "application/vnd.android.package-archive")
+    intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    activity.startActivity(intent)
 
-    # -----------------------------------------------------
-    # Eigener FileProvider
-    # -----------------------------------------------------
 
-    authority = (
-        ANDROID_PACKAGE_NAME
-        + ".updateprovider"
-    )
-
-    apk_uri = (
-        FileProvider.getUriForFile(
-            activity,
-            authority,
-            apk_file
-        )
-    )
-
-    # -----------------------------------------------------
-    # Android Installer
-    # -----------------------------------------------------
-
-    install_intent = Intent(
-        Intent.ACTION_INSTALL_PACKAGE
-    )
-
-    install_intent.setDataAndType(
-        apk_uri,
-        "application/vnd.android.package-archive"
-    )
-
-    install_intent.addFlags(
-        Intent.FLAG_GRANT_READ_URI_PERMISSION
-    )
-
-    install_intent.addFlags(
-        Intent.FLAG_ACTIVITY_NEW_TASK
-    )
-
-    # -----------------------------------------------------
-    # Installer starten
-    # -----------------------------------------------------
-
-    activity.startActivity(
-        install_intent
-    )
-
-    return True
-
-# =========================================================
-# UPDATE HERUNTERLADEN + INSTALLIEREN
-# =========================================================
-
-async def download_and_install_update(
-    download_url
-):
+async def download_and_install_update(download_url: str) -> Path | None:
+    """Fordert Installationsrecht an und lädt/öffnet danach die APK."""
     can_install = await asyncio.to_thread(request_install_permission)
     if not can_install:
         return None
-
-    apk_path = await asyncio.to_thread(
-        download_apk,
-        download_url
-    )
-
-    await asyncio.to_thread(
-        start_android_update,
-        apk_path
-    )
-
+    apk_path = await asyncio.to_thread(download_apk, download_url)
+    await asyncio.to_thread(start_android_update, apk_path)
     return apk_path
+
