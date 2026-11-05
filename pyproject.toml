@@ -1,6 +1,6 @@
 [project]
 name = "beverageorganiser"
-version = "1.2.5"
+version = "1.2.6"
 description = "Getränkekasse"
 requires-python = ">=3.11,<3.13"
 dependencies = [
@@ -18,6 +18,14 @@ company = "JuJ-FiF"
 copyright = "Copyright © 2026 JuJ-FiF"
 assets = ["assets"]
 permissions = ["camera"]
+
+[tool.flet.app]
+exclude = [
+    "data.json",
+    "data.json.bak",
+    "settings.json",
+    "settings.json.bak",
+]
 
 [tool.flet.android.permissions]
 "android.permission.REQUEST_INSTALL_PACKAGES" = true

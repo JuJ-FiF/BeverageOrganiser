@@ -1,4 +1,5 @@
 import os
+import tempfile
 from datetime import datetime
 from pathlib import Path
 import uuid
@@ -65,7 +66,7 @@ def create_receipt_filename(extension=".jpg"):
 
 def save_receipt(data, extension=".jpg"):
     """
-    Speichert Bildbytes im Belegordner.
+    Speichert eine dauerhafte Kopie im App-Speicher.
 
     Gibt den relativen Pfad zurück.
     """
@@ -81,9 +82,27 @@ def save_receipt(data, extension=".jpg"):
 
     directory = get_receipts_directory()
     file_path = directory / filename
-
-    with open(file_path, "wb") as file:
-        file.write(data)
+    temporary_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="wb",
+            dir=directory,
+            prefix=f".{filename}.",
+            suffix=".tmp",
+            delete=False,
+        ) as file:
+            temporary_path = Path(file.name)
+            file.write(data)
+            file.flush()
+            os.fsync(file.fileno())
+        os.replace(temporary_path, file_path)
+    except Exception:
+        if temporary_path is not None:
+            try:
+                temporary_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+        raise
 
     relative_path = (
         Path(RECEIPT_FOLDER_NAME)

@@ -1,6 +1,7 @@
 """Camera, receipt, and expense-entry workflows for the overview screen."""
 
 import asyncio
+import math
 import sys
 from pathlib import Path
 
@@ -9,7 +10,7 @@ import flet_permission_handler as fph
 
 from Utils.animations import booking_animation
 from Utils.classes import Expense
-from Utils.receipts import save_receipt
+from Utils.receipts import delete_receipt, read_receipt, save_receipt
 from Screens.dialogs import show_message_dialog
 
 
@@ -221,6 +222,267 @@ class ExpenseWorkflowMixin:
     # =========================================================
     # AUSGABE HINZUFÜGEN
     # =========================================================
+
+    def open_edit_expense_dialog(self, expense):
+        title_field = ft.TextField(
+            label="Bezeichnung",
+            value=expense.title,
+            autofocus=True,
+        )
+        amount_field = ft.TextField(
+            label="Gesamtbetrag in €",
+            value=f"{expense.amount:.2f}".replace(".", ","),
+            keyboard_type=ft.KeyboardType.NUMBER,
+        )
+        beverages = list(dict.fromkeys([
+            *self.app.beverage_objects,
+            *expense.items.keys(),
+        ]))
+        counts = {
+            beverage: int(expense.items.get(beverage, 0))
+            for beverage in beverages
+        }
+        count_labels = {}
+        beverage_list = ft.ListView(height=190, spacing=0)
+
+        def change_count(beverage, delta):
+            counts[beverage] = max(0, counts[beverage] + delta)
+            count_labels[beverage].value = f"{counts[beverage]}x"
+            self.app.page.update()
+
+        for beverage in beverages:
+            count_labels[beverage] = ft.Text(
+                f"{counts[beverage]}x",
+                width=42,
+                text_align=ft.TextAlign.CENTER,
+            )
+            beverage_list.controls.append(
+                ft.ListTile(
+                    title=ft.Text(beverage.name),
+                    trailing=ft.Row(
+                        [
+                            ft.IconButton(
+                                ft.Icons.REMOVE,
+                                tooltip="Anzahl verringern",
+                                on_click=lambda e, item=beverage: change_count(item, -1),
+                            ),
+                            count_labels[beverage],
+                            ft.IconButton(
+                                ft.Icons.ADD,
+                                tooltip="Anzahl erhöhen",
+                                on_click=lambda e, item=beverage: change_count(item, 1),
+                            ),
+                        ],
+                        width=150,
+                        alignment=ft.MainAxisAlignment.END,
+                        spacing=0,
+                    ),
+                )
+            )
+
+        current_receipt = read_receipt(expense.receipt)
+        receipt_state = {
+            "bytes": None,
+            "extension": ".jpg",
+            "name": None,
+            "remove": False,
+        }
+        receipt_preview = ft.Container(
+            visible=False,
+            width=120,
+            height=150,
+            border_radius=8,
+            clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
+        )
+        receipt_status = ft.Text(
+            "",
+            size=12,
+            color=ft.Colors.ON_SURFACE_VARIANT,
+        )
+        remove_receipt_button = ft.TextButton(
+            "Beleg entfernen",
+            icon=ft.Icons.DELETE_OUTLINE,
+            visible=False,
+        )
+
+        def update_receipt_preview():
+            data = receipt_state["bytes"] or (
+                current_receipt if not receipt_state["remove"] else None
+            )
+            receipt_preview.visible = bool(data)
+            receipt_preview.content = (
+                ft.Image(
+                    src=data,
+                    fit=ft.BoxFit.CONTAIN,
+                    width=120,
+                    height=150,
+                )
+                if data
+                else None
+            )
+            if receipt_state["bytes"]:
+                receipt_status.value = f"Neuer Beleg: {receipt_state['name']}"
+            elif current_receipt and not receipt_state["remove"]:
+                receipt_status.value = "Beleg ist im App-Speicher hinterlegt."
+            elif expense.receipt and not receipt_state["remove"]:
+                receipt_status.value = "Gespeicherter Beleg wurde nicht gefunden."
+            elif receipt_state["remove"]:
+                receipt_status.value = "Beleg wird beim Speichern entfernt."
+            else:
+                receipt_status.value = "Kein Beleg hinterlegt."
+            remove_receipt_button.visible = bool(
+                receipt_state["bytes"]
+                or expense.receipt
+                or current_receipt
+            ) and not receipt_state["remove"]
+            self.app.page.update()
+
+        async def pick_receipt(_=None):
+            try:
+                picker = ft.FilePicker()
+                if picker not in self.app.page.services:
+                    self.app.page.services.append(picker)
+                files = await picker.pick_files(
+                    dialog_title="Beleg auswählen",
+                    allow_multiple=False,
+                    with_data=True,
+                    file_type=ft.FilePickerFileType.CUSTOM,
+                    allowed_extensions=["jpg", "jpeg", "png", "webp"],
+                )
+                if not files:
+                    return
+                selected = files[0]
+                if not selected.bytes:
+                    self.show_message("Das Bild konnte nicht gelesen werden.")
+                    return
+                extension = Path(selected.name).suffix.lower()
+                if extension not in {".jpg", ".jpeg", ".png", ".webp"}:
+                    extension = ".jpg"
+                receipt_state.update(
+                    bytes=selected.bytes,
+                    extension=extension,
+                    name=selected.name,
+                    remove=False,
+                )
+                update_receipt_preview()
+            except Exception as ex:
+                print("Receipt picker error:", type(ex).__name__, ex)
+                self.show_message("Bild konnte nicht ausgewählt werden.")
+
+        def remove_receipt(_=None):
+            receipt_state.update(bytes=None, name=None, remove=True)
+            update_receipt_preview()
+
+        remove_receipt_button.on_click = remove_receipt
+        update_receipt_preview()
+
+        def save(_):
+            title = (title_field.value or "").strip()
+            amount_raw = (amount_field.value or "").strip().replace(",", ".")
+            if not title:
+                title_field.error_text = "Bitte eine Bezeichnung eingeben."
+                title_field.update()
+                return
+            try:
+                amount = float(amount_raw)
+                if not math.isfinite(amount) or amount <= 0:
+                    raise ValueError
+            except ValueError:
+                amount_field.error_text = "Bitte einen positiven Betrag eingeben."
+                amount_field.update()
+                return
+
+            old_state = (expense.title, expense.amount, expense.items, expense.receipt)
+            old_counts = {beverage: beverage.count for beverage in beverages}
+            receipt_path = expense.receipt
+            new_receipt_path = None
+            if receipt_state["remove"]:
+                receipt_path = None
+            elif receipt_state["bytes"]:
+                try:
+                    receipt_path = save_receipt(
+                        receipt_state["bytes"], receipt_state["extension"]
+                    )
+                    new_receipt_path = receipt_path
+                except Exception as ex:
+                    print("Receipt save error:", type(ex).__name__, ex)
+                    self.show_message("Der Beleg konnte nicht im App-Speicher gesichert werden.")
+                    return
+
+            updated_items = {
+                beverage: count
+                for beverage, count in counts.items()
+                if count > 0
+            }
+            expense.title = title
+            expense.amount = amount
+            expense.items = updated_items
+            expense.receipt = receipt_path
+            for beverage in beverages:
+                previous = int(old_state[2].get(beverage, 0))
+                beverage.count = max(
+                    0,
+                    int(beverage.count) + counts[beverage] - previous,
+                )
+
+            try:
+                saved = self.app.save_data()
+            except Exception:
+                saved = False
+            if not saved:
+                expense.title, expense.amount, expense.items, expense.receipt = old_state
+                for beverage, value in old_counts.items():
+                    beverage.count = value
+                if new_receipt_path:
+                    delete_receipt(new_receipt_path)
+                self.show_message("Die Buchung konnte nicht gespeichert werden.")
+                return
+
+            if old_state[3] and old_state[3] != receipt_path:
+                delete_receipt(old_state[3])
+            self.update_overview()
+            if "beverage_main" in self.app.screens:
+                self.app.screens["beverage_main"].update_list()
+            self.app.page.pop_dialog()
+            self.show_message("Buchung aktualisiert.")
+
+        dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("Buchung bearbeiten"),
+            content=ft.Container(
+                width=440,
+                content=ft.Column(
+                    controls=[
+                        title_field,
+                        amount_field,
+                        ft.Text("Gebuchte Getränke", weight=ft.FontWeight.BOLD),
+                        beverage_list,
+                        ft.Row(
+                            [
+                                ft.OutlinedButton(
+                                    "Beleg auswählen",
+                                    icon=ft.Icons.IMAGE,
+                                    on_click=pick_receipt,
+                                ),
+                                remove_receipt_button,
+                            ],
+                            wrap=True,
+                            spacing=8,
+                        ),
+                        receipt_preview,
+                        receipt_status,
+                    ],
+                    tight=True,
+                    spacing=10,
+                    scroll=ft.ScrollMode.AUTO,
+                ),
+            ),
+            actions=[
+                ft.TextButton("Abbrechen", on_click=lambda _: self.app.page.pop_dialog()),
+                ft.FilledButton("Speichern", icon=ft.Icons.SAVE, on_click=save),
+            ],
+        )
+        self.app.page.show_dialog(dialog)
 
     def open_add_expense_dialog(self, e=None):
 

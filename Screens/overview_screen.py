@@ -153,7 +153,8 @@ class OverviewScreen(ExpenseWorkflowMixin, ft.Column):
                     ),
                     title=title_content,
                     subtitle=ft.Text(
-                        f"Datum: {expense.date}",
+                        f"Datum: {expense.date}"
+                        + (" · Beleg" if has_receipt else " · Kein Beleg"),
                         color=ft.Colors.ON_SURFACE_VARIANT,
                     ),
                     trailing=ft.Text(
@@ -164,12 +165,7 @@ class OverviewScreen(ExpenseWorkflowMixin, ft.Column):
                         text_align=ft.TextAlign.RIGHT
                     ),
                     content_padding=ft.Padding.symmetric(horizontal=8),
-                    on_click=(
-                        lambda e, exp=expense:
-                        self.show_expense_details(exp)
-                    )
-                    if has_receipt
-                    else None
+                    on_click=lambda e, exp=expense: self.show_expense_details(exp),
                 ),
                 padding=4,
             )
@@ -198,42 +194,56 @@ class OverviewScreen(ExpenseWorkflowMixin, ft.Column):
             expense.receipt
         )
 
-        if not receipt_data:
-            self.show_message(
-                "Der Beleg konnte nicht gefunden werden."
+        detail_controls = [
+            ft.Text(expense.title, weight=ft.FontWeight.BOLD),
+            ft.Text(f"{expense.amount:.2f} €"),
+            ft.Divider(),
+        ]
+        if receipt_data:
+            detail_controls.append(
+                ft.Image(
+                    src=receipt_data,
+                    fit=ft.BoxFit.CONTAIN,
+                    width=320,
+                    height=480,
+                )
             )
-            return
+        elif expense.receipt:
+            detail_controls.append(
+                ft.Text(
+                    "Der gespeicherte Beleg wurde nicht gefunden. "
+                    "Du kannst einen neuen Beleg hinzufügen.",
+                    color=ft.Colors.ERROR,
+                )
+            )
+        else:
+            detail_controls.append(
+                ft.Text(
+                    "Für diese Buchung ist noch kein Beleg hinterlegt."
+                )
+            )
 
-        image = ft.Image(
-            src=receipt_data,
-            fit=ft.BoxFit.CONTAIN,
-            width=320,
-            height=480
-        )
+        def edit_expense(_):
+            self.app.page.pop_dialog()
+            self.open_edit_expense_dialog(expense)
 
         dialog = ft.AlertDialog(
             modal=True,
-            title=ft.Text(
-                "Beleg"
-            ),
+            title=ft.Text("Buchungsdetails"),
             content=ft.Column(
                 tight=True,
                 horizontal_alignment=(
                     ft.CrossAxisAlignment.CENTER
                 ),
-                controls=[
-                    ft.Text(
-                        expense.title,
-                        weight=ft.FontWeight.BOLD
-                    ),
-                    ft.Text(
-                        f"{expense.amount:.2f} €"
-                    ),
-                    ft.Divider(),
-                    image
-                ]
+                controls=detail_controls,
+                scroll=ft.ScrollMode.AUTO,
             ),
             actions=[
+                ft.FilledButton(
+                    "Buchung bearbeiten",
+                    icon=ft.Icons.EDIT_OUTLINED,
+                    on_click=edit_expense,
+                ),
                 ft.TextButton(
                     "Schließen",
                     on_click=lambda e:
